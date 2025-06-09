@@ -15,6 +15,13 @@ This repository provides a small web application to help you practice LeetCode p
    ```
 3. Open `http://localhost:8000` in your browser and choose a difficulty.
 
+For languages other than Python you also need local compilers available. On
+Debian/Ubuntu you can install them with:
+```bash
+sudo apt install g++ openjdk-17-jdk-headless golang-go
+```
+If you run the app via Docker these are installed automatically.
+
 ## Online Code Runner
 
 Once you select a problem you can run code directly on the problem page. Select

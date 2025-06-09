@@ -1,5 +1,13 @@
 FROM python:3.11-slim
 
+# Install compilers for the online code runner
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        g++ \
+        openjdk-17-jdk-headless \
+        golang-go && \
+    rm -rf /var/lib/apt/lists/*
+
 # Install uv - a fast Python package manager
 RUN pip install --no-cache-dir uv
 
