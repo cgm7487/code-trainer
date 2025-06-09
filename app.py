@@ -19,24 +19,48 @@ GRAPHQL_API = "https://leetcode.com/graphql"
 
 INDEX_HTML = """
 <!doctype html>
-<title>LeetCode Random Selector</title>
-<h1>Select Difficulty</h1>
-<form action="/random" method="get">
-  <select name="difficulty">
-    <option value="Easy">Easy</option>
-    <option value="Medium">Medium</option>
-    <option value="Hard">Hard</option>
-  </select>
-  <button type="submit">Get Problem</button>
-</form>
-{% if problem %}
-<h2>{{ problem.title }} ({{ problem.difficulty }})</h2>
-<p><a href="{{ problem.url }}" target="_blank">{{ problem.url }}</a></p>
-<div>{{ problem.content or "No description available." }}</div>
-{% if problem.sampleTestCase %}
-<pre>{{ problem.sampleTestCase }}</pre>
-{% endif %}
-{% endif %}
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <title>LeetCode Random Selector</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+  </head>
+  <body class="bg-light">
+    <div class="container py-5">
+      <h1 class="mb-4 text-center">Select Difficulty</h1>
+      <form class="row g-3 justify-content-center" action="/random" method="get">
+        <div class="col-auto">
+          <select class="form-select" name="difficulty">
+            <option value="Easy">Easy</option>
+            <option value="Medium">Medium</option>
+            <option value="Hard">Hard</option>
+          </select>
+        </div>
+        <div class="col-auto">
+          <button class="btn btn-primary" type="submit">
+            <i class="fa-solid fa-dice"></i>
+            Get Problem
+          </button>
+        </div>
+      </form>
+      {% if problem %}
+      <div class="card mt-4">
+        <div class="card-body">
+          <h2 class="card-title">
+            <a href="{{ problem.url }}" target="_blank">{{ problem.title }}</a>
+            <span class="badge bg-secondary">{{ problem.difficulty }}</span>
+          </h2>
+          <div class="card-text">{{ problem.content or "No description available." }}</div>
+          {% if problem.sampleTestCase %}
+          <pre class="mt-3 bg-dark text-white p-3">{{ problem.sampleTestCase }}</pre>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+    </div>
+  </body>
+</html>
 """
 
 TEMPLATE = Template(INDEX_HTML)
