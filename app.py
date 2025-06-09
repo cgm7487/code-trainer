@@ -59,8 +59,29 @@ INDEX_HTML = """
           {% if problem.sampleTestCase %}
           <pre class="mt-3 bg-dark text-white p-3">{{ problem.sampleTestCase }}</pre>
           {% endif %}
+          <form id="code-form" class="mt-3">
+            <select class="form-select mb-2" name="language">
+              <option value="python">Python</option>
+              <option value="cpp">C++</option>
+              <option value="java">Java</option>
+              <option value="go">Go</option>
+            </select>
+            <textarea class="form-control" name="code" rows="10" placeholder="print('hello')"></textarea>
+            <button type="submit" class="btn btn-primary mt-3">Run Code</button>
+          </form>
+          <pre id="output" class="bg-dark text-white p-3"></pre>
         </div>
       </div>
+      <script>
+        document.getElementById('code-form').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const code = e.target.code.value;
+          const language = e.target.language.value;
+          const resp = await fetch('/execute', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code, language})});
+          const data = await resp.json();
+          document.getElementById('output').textContent = data.stdout + data.stderr;
+        });
+      </script>
       {% endif %}
     </div>
   </body>
@@ -80,6 +101,12 @@ SOLVE_HTML = """
       <h1 class=\"mb-4\">{{ problem.title }}</h1>
       <div class=\"mb-3\">{{ problem.content or 'No description available.' }}</div>
       <form id=\"code-form\" class=\"mb-3\">
+        <select class=\"form-select mb-2\" name=\"language\">
+          <option value=\"python\">Python</option>
+          <option value=\"cpp\">C++</option>
+          <option value=\"java\">Java</option>
+          <option value=\"go\">Go</option>
+        </select>
         <textarea class=\"form-control\" name=\"code\" rows=\"10\" placeholder=\"print('hello')\"></textarea>
         <button type=\"submit\" class=\"btn btn-primary mt-3\">Run Code</button>
       </form>
@@ -89,7 +116,8 @@ SOLVE_HTML = """
       document.getElementById('code-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const code = e.target.code.value;
-        const resp = await fetch('/execute', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code})});
+        const language = e.target.language.value;
+        const resp = await fetch('/execute', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code, language})});
         const data = await resp.json();
         document.getElementById('output').textContent = data.stdout + data.stderr;
       });
@@ -204,10 +232,7 @@ async def solve_page(slug: str):
     return HTMLResponse(SOLVE_TEMPLATE.render(problem=problem))
 
 
-@app.post("/execute")
-async def execute_code(request: Request):
-    data = await request.json()
-    code = data.get("code", "")
+async def _run_python(code: str) -> dict:
     with tempfile.NamedTemporaryFile("w+", suffix=".py", delete=False) as tmp:
         tmp.write(code)
         tmp.flush()
@@ -228,6 +253,106 @@ async def execute_code(request: Request):
         "stderr": stderr.decode(),
         "returncode": proc.returncode,
     }
+
+
+async def _run_cpp(code: str) -> dict:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = os.path.join(tmpdir, "main.cpp")
+        exe = os.path.join(tmpdir, "main")
+        with open(src, "w") as f:
+            f.write(code)
+        compile_proc = await asyncio.create_subprocess_exec(
+            "g++",
+            src,
+            "-o",
+            exe,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        cout, cerr = await compile_proc.communicate()
+        if compile_proc.returncode != 0:
+            return {"stdout": cout.decode(), "stderr": cerr.decode(), "returncode": compile_proc.returncode}
+        run_proc = await asyncio.create_subprocess_exec(
+            exe,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(run_proc.communicate(), timeout=5)
+        except asyncio.TimeoutError:
+            run_proc.kill()
+            return {"stdout": "", "stderr": "Execution timed out", "returncode": 1}
+        return {"stdout": stdout.decode(), "stderr": stderr.decode(), "returncode": run_proc.returncode}
+
+
+async def _run_java(code: str) -> dict:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        src = os.path.join(tmpdir, "Main.java")
+        with open(src, "w") as f:
+            f.write(code)
+        compile_proc = await asyncio.create_subprocess_exec(
+            "javac",
+            src,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        cout, cerr = await compile_proc.communicate()
+        if compile_proc.returncode != 0:
+            return {"stdout": cout.decode(), "stderr": cerr.decode(), "returncode": compile_proc.returncode}
+        run_proc = await asyncio.create_subprocess_exec(
+            "java",
+            "-cp",
+            tmpdir,
+            "Main",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(run_proc.communicate(), timeout=5)
+        except asyncio.TimeoutError:
+            run_proc.kill()
+            return {"stdout": "", "stderr": "Execution timed out", "returncode": 1}
+        return {"stdout": stdout.decode(), "stderr": stderr.decode(), "returncode": run_proc.returncode}
+
+
+async def _run_go(code: str) -> dict:
+    with tempfile.NamedTemporaryFile("w+", suffix=".go", delete=False) as tmp:
+        tmp.write(code)
+        tmp.flush()
+        proc = await asyncio.create_subprocess_exec(
+            "go",
+            "run",
+            tmp.name,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
+        except asyncio.TimeoutError:
+            proc.kill()
+            return {"stdout": "", "stderr": "Execution timed out", "returncode": 1}
+    os.unlink(tmp.name)
+    return {
+        "stdout": stdout.decode(),
+        "stderr": stderr.decode(),
+        "returncode": proc.returncode,
+    }
+
+
+@app.post("/execute")
+async def execute_code(request: Request):
+    data = await request.json()
+    code = data.get("code", "")
+    language = data.get("language", "python").lower()
+    if language == "python":
+        return await _run_python(code)
+    if language in {"cpp", "c++"}:
+        return await _run_cpp(code)
+    if language == "java":
+        return await _run_java(code)
+    if language == "go":
+        return await _run_go(code)
+    return {"stdout": "", "stderr": "Unsupported language", "returncode": 1}
 
 
 if __name__ == "__main__":
