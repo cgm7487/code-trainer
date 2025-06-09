@@ -69,12 +69,23 @@ INDEX_HTML = """
               <option value="go">Go</option>
             </select>
             <textarea class="form-control" name="code" rows="10" placeholder="print('hello')"></textarea>
+            <button type="button" id="fill-snippet-btn" class="btn btn-secondary mt-2">Start Code</button>
             <button type="submit" class="btn btn-primary mt-3">Run Code</button>
           </form>
           <pre id="output" class="bg-dark text-white p-3"></pre>
         </div>
       </div>
+      <script id="snippets-data" type="application/json">{{ snippets_json }}</script>
       <script>
+        const snippets = JSON.parse(document.getElementById('snippets-data').textContent || '[]');
+        function fillSnippet() {
+          const lang = document.querySelector('#code-form select[name="language"]').value;
+          const s = snippets.find(sn => sn.langSlug === lang);
+          if (s) {
+            document.querySelector('#code-form textarea[name="code"]').value = s.code;
+          }
+        }
+        document.getElementById('fill-snippet-btn').addEventListener('click', fillSnippet);
         document.getElementById('code-form').addEventListener('submit', async (e) => {
           e.preventDefault();
           const code = e.target.code.value;
@@ -120,11 +131,22 @@ SOLVE_HTML = """
           <option value=\"go\">Go</option>
         </select>
         <textarea class=\"form-control\" name=\"code\" rows=\"10\" placeholder=\"print('hello')\"></textarea>
+        <button type=\"button\" id=\"fill-snippet-btn\" class=\"btn btn-secondary mt-2\">Start Code</button>
         <button type=\"submit\" class=\"btn btn-primary mt-3\">Run Code</button>
       </form>
       <pre id=\"output\" class=\"bg-dark text-white p-3\"></pre>
     </div>
+    <script id=\"snippets-data\" type=\"application/json\">{{ snippets_json }}</script>
     <script>
+      const snippets = JSON.parse(document.getElementById('snippets-data').textContent || '[]');
+      function fillSnippet() {
+        const lang = document.querySelector('#code-form select[name="language"]').value;
+        const s = snippets.find(sn => sn.langSlug === lang);
+        if (s) {
+          document.querySelector('#code-form textarea[name="code"]').value = s.code;
+        }
+      }
+      document.getElementById('fill-snippet-btn').addEventListener('click', fillSnippet);
       document.getElementById('code-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const code = e.target.code.value;
@@ -230,7 +252,7 @@ def get_problem_by_slug(slug: str) -> Optional[dict]:
     problems = fetch_problems()
     for p in problems:
         if p.get("url", "").rstrip("/").split("/")[-1] == slug:
-            if not p.get("content"):
+            if not p.get("content") or not p.get("codeSnippets"):
                 p.update(fetch_problem_detail(slug))
             return p
     return None
@@ -244,7 +266,8 @@ async def index(request: Request, difficulty: Optional[str] = None):
         matches = [p for p in problems if p["difficulty"].lower() == difficulty.lower()]
         if matches:
             problem = random.choice(matches)
-    return HTMLResponse(TEMPLATE.render(problem=problem))
+    snippets_json = json.dumps(problem.get("codeSnippets", [])) if problem else "[]"
+    return HTMLResponse(TEMPLATE.render(problem=problem, snippets_json=snippets_json))
 
 
 @app.get("/random")
@@ -259,7 +282,8 @@ async def random_problem(request: Request, difficulty: str = ""):
         if slug:
             problem.update(fetch_problem_detail(slug))
     if request.headers.get("accept", "").startswith("text/html"):
-        return HTMLResponse(TEMPLATE.render(problem=problem))
+        snippets_json = json.dumps(problem.get("codeSnippets", []))
+        return HTMLResponse(TEMPLATE.render(problem=problem, snippets_json=snippets_json))
     return problem
 
 
@@ -268,7 +292,8 @@ async def solve_page(slug: str):
     problem = get_problem_by_slug(slug)
     if not problem:
         raise HTTPException(status_code=404, detail="Problem not found")
-    return HTMLResponse(SOLVE_TEMPLATE.render(problem=problem))
+    snippets_json = json.dumps(problem.get("codeSnippets", []))
+    return HTMLResponse(SOLVE_TEMPLATE.render(problem=problem, snippets_json=snippets_json))
 
 
 async def _run_python(code: str, stdin: str = "") -> dict:

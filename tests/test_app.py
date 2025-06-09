@@ -149,9 +149,28 @@ def test_random_problem_fetch_detail(monkeypatch):
 
 def test_solve_page(monkeypatch):
     monkeypatch.setattr(app, "fetch_problems", lambda: app.LOCAL_PROBLEMS)
+    monkeypatch.setattr(app, "fetch_problem_detail", lambda slug: {"codeSnippets": [{"lang": "Python3", "langSlug": "python", "code": "print('hi')"}]})
     response = client.get("/solve/two-sum")
     assert response.status_code == 200
     assert "textarea" in response.text
+
+
+def test_solve_page_contains_snippet(monkeypatch):
+    monkeypatch.setattr(app, "fetch_problems", lambda: app.LOCAL_PROBLEMS)
+
+    def fake_detail(slug):
+        return {
+            "content": "desc",
+            "sampleTestCase": "",
+            "codeSnippets": [
+                {"lang": "Python3", "langSlug": "python", "code": "print('hi')"}
+            ],
+        }
+
+    monkeypatch.setattr(app, "fetch_problem_detail", fake_detail)
+    response = client.get("/solve/two-sum")
+    assert response.status_code == 200
+    assert "print('hi')" in response.text
 
 
 def test_execute_code_python():
