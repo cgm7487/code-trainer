@@ -4,7 +4,7 @@ import asyncio
 import os
 import sys
 import tempfile
-from typing import Optional
+from typing import Optional, Tuple
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
@@ -59,6 +59,7 @@ INDEX_HTML = """
           <div class="card-text">{{ problem.content or "No description available." }}</div>
           {% if problem.sampleTestCase %}
           <pre class="mt-3 bg-dark text-white p-3">{{ problem.sampleTestCase }}</pre>
+          <input type="hidden" id="sample-case" value="{{ problem.sampleTestCase|e }}">
           {% endif %}
           <form id="code-form" class="mt-3">
             <select class="form-select mb-2" name="language">
@@ -78,9 +79,15 @@ INDEX_HTML = """
           e.preventDefault();
           const code = e.target.code.value;
           const language = e.target.language.value;
-          const resp = await fetch('/execute', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code, language})});
+          const sampleCaseEl = document.getElementById('sample-case');
+          const sampleCase = sampleCaseEl ? sampleCaseEl.value : '';
+          const resp = await fetch('/execute', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code, language, sampleCase})});
           const data = await resp.json();
-          document.getElementById('output').textContent = data.stdout + data.stderr;
+          let output = data.stdout + data.stderr;
+          if (typeof data.passed !== 'undefined') {
+            output += '\nPassed: ' + data.passed;
+          }
+          document.getElementById('output').textContent = output;
         });
       </script>
       {% endif %}
@@ -101,6 +108,10 @@ SOLVE_HTML = """
     <div class=\"container py-5\">
       <h1 class=\"mb-4\">{{ problem.title }}</h1>
       <div class=\"mb-3\">{{ problem.content or 'No description available.' }}</div>
+      {% if problem.sampleTestCase %}
+      <pre class=\"mt-3 bg-dark text-white p-3\">{{ problem.sampleTestCase }}</pre>
+      <input type=\"hidden\" id=\"sample-case\" value="{{ problem.sampleTestCase|e }}">
+      {% endif %}
       <form id=\"code-form\" class=\"mb-3\">
         <select class=\"form-select mb-2\" name=\"language\">
           <option value=\"python\">Python</option>
@@ -118,9 +129,15 @@ SOLVE_HTML = """
         e.preventDefault();
         const code = e.target.code.value;
         const language = e.target.language.value;
-        const resp = await fetch('/execute', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code, language})});
+        const sampleCaseEl = document.getElementById('sample-case');
+        const sampleCase = sampleCaseEl ? sampleCaseEl.value : '';
+        const resp = await fetch('/execute', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code, language, sampleCase})});
         const data = await resp.json();
-        document.getElementById('output').textContent = data.stdout + data.stderr;
+        let output = data.stdout + data.stderr;
+        if (typeof data.passed !== 'undefined') {
+          output += '\nPassed: ' + data.passed;
+        }
+        document.getElementById('output').textContent = output;
       });
     </script>
   </body>
@@ -129,6 +146,21 @@ SOLVE_HTML = """
 
 TEMPLATE = Template(INDEX_HTML)
 SOLVE_TEMPLATE = Template(SOLVE_HTML)
+
+
+def parse_sample_test_case(case: str) -> tuple[str, str]:
+    """Extract input and expected output from a sample test case string."""
+    if not case:
+        return "", ""
+    input_data = ""
+    expected = ""
+    for line in case.splitlines():
+        line = line.strip()
+        if line.lower().startswith("input") and ":" in line:
+            input_data = line.split(":", 1)[1].strip()
+        elif line.lower().startswith("output") and ":" in line:
+            expected = line.split(":", 1)[1].strip()
+    return input_data, expected
 
 
 def fetch_problem_detail(slug: str) -> dict:
@@ -233,18 +265,19 @@ async def solve_page(slug: str):
     return HTMLResponse(SOLVE_TEMPLATE.render(problem=problem))
 
 
-async def _run_python(code: str) -> dict:
+async def _run_python(code: str, stdin: str = "") -> dict:
     with tempfile.NamedTemporaryFile("w+", suffix=".py", delete=False) as tmp:
         tmp.write(code)
         tmp.flush()
         proc = await asyncio.create_subprocess_exec(
             sys.executable,
             tmp.name,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(stdin.encode()), timeout=5)
         except asyncio.TimeoutError:
             proc.kill()
             return {"stdout": "", "stderr": "Execution timed out", "returncode": 1}
@@ -256,7 +289,7 @@ async def _run_python(code: str) -> dict:
     }
 
 
-async def _run_cpp(code: str) -> dict:
+async def _run_cpp(code: str, stdin: str = "") -> dict:
     with tempfile.TemporaryDirectory() as tmpdir:
         src = os.path.join(tmpdir, "main.cpp")
         exe = os.path.join(tmpdir, "main")
@@ -275,18 +308,19 @@ async def _run_cpp(code: str) -> dict:
             return {"stdout": cout.decode(), "stderr": cerr.decode(), "returncode": compile_proc.returncode}
         run_proc = await asyncio.create_subprocess_exec(
             exe,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(run_proc.communicate(), timeout=5)
+            stdout, stderr = await asyncio.wait_for(run_proc.communicate(stdin.encode()), timeout=5)
         except asyncio.TimeoutError:
             run_proc.kill()
             return {"stdout": "", "stderr": "Execution timed out", "returncode": 1}
         return {"stdout": stdout.decode(), "stderr": stderr.decode(), "returncode": run_proc.returncode}
 
 
-async def _run_java(code: str) -> dict:
+async def _run_java(code: str, stdin: str = "") -> dict:
     with tempfile.TemporaryDirectory() as tmpdir:
         src = os.path.join(tmpdir, "Main.java")
         with open(src, "w") as f:
@@ -305,18 +339,19 @@ async def _run_java(code: str) -> dict:
             "-cp",
             tmpdir,
             "Main",
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(run_proc.communicate(), timeout=5)
+            stdout, stderr = await asyncio.wait_for(run_proc.communicate(stdin.encode()), timeout=5)
         except asyncio.TimeoutError:
             run_proc.kill()
             return {"stdout": "", "stderr": "Execution timed out", "returncode": 1}
         return {"stdout": stdout.decode(), "stderr": stderr.decode(), "returncode": run_proc.returncode}
 
 
-async def _run_go(code: str) -> dict:
+async def _run_go(code: str, stdin: str = "") -> dict:
     with tempfile.NamedTemporaryFile("w+", suffix=".go", delete=False) as tmp:
         tmp.write(code)
         tmp.flush()
@@ -324,11 +359,12 @@ async def _run_go(code: str) -> dict:
             "go",
             "run",
             tmp.name,
+            stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(stdin.encode()), timeout=5)
         except asyncio.TimeoutError:
             proc.kill()
             return {"stdout": "", "stderr": "Execution timed out", "returncode": 1}
@@ -345,15 +381,22 @@ async def execute_code(request: Request):
     data = await request.json()
     code = data.get("code", "")
     language = data.get("language", "python").lower()
+    sample_case = data.get("sampleCase", "")
+    input_data, expected = parse_sample_test_case(sample_case)
+    stdin = input_data + "\n" if input_data else ""
     if language == "python":
-        return await _run_python(code)
-    if language in {"cpp", "c++"}:
-        return await _run_cpp(code)
-    if language == "java":
-        return await _run_java(code)
-    if language == "go":
-        return await _run_go(code)
-    return {"stdout": "", "stderr": "Unsupported language", "returncode": 1}
+        result = await _run_python(code, stdin)
+    elif language in {"cpp", "c++"}:
+        result = await _run_cpp(code, stdin)
+    elif language == "java":
+        result = await _run_java(code, stdin)
+    elif language == "go":
+        result = await _run_go(code, stdin)
+    else:
+        result = {"stdout": "", "stderr": "Unsupported language", "returncode": 1}
+    if expected:
+        result["passed"] = result.get("returncode") == 0 and result.get("stdout", "").strip() == expected
+    return result
 
 
 if __name__ == "__main__":
