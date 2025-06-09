@@ -185,7 +185,7 @@ def parse_sample_test_case(case: str) -> tuple[str, str]:
     return input_data, expected
 
 
-def fetch_problem_detail(slug: str) -> dict:
+async def fetch_problem_detail(slug: str) -> dict:
     """Retrieve problem content and sample test case from LeetCode."""
     query = (
         "query getQuestion($titleSlug: String!) {\n"
@@ -203,26 +203,28 @@ def fetch_problem_detail(slug: str) -> dict:
     payload = {"query": query, "variables": {"titleSlug": slug}}
     headers = {"User-Agent": "Mozilla/5.0"}
     try:
-        resp = httpx.post(GRAPHQL_API, json=payload, headers=headers, timeout=10.0)
-        resp.raise_for_status()
-        data = resp.json()
-        q = data.get("data", {}).get("question", {})
-        return {
-            "content": q.get("content", ""),
-            "sampleTestCase": q.get("sampleTestCase", ""),
-            "codeSnippets": q.get("codeSnippets", []),
-        }
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(GRAPHQL_API, json=payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            q = data.get("data", {}).get("question", {})
+            return {
+                "content": q.get("content", ""),
+                "sampleTestCase": q.get("sampleTestCase", ""),
+                "codeSnippets": q.get("codeSnippets", []),
+            }
     except Exception:
         return {"content": "", "sampleTestCase": "", "codeSnippets": []}
 
 
-def fetch_problems() -> list[dict]:
+async def fetch_problems() -> list[dict]:
     """Fetch the list of problems from LeetCode or fallback to local data."""
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
-        resp = httpx.get(LEETCODE_API, headers=headers, timeout=10.0)
-        resp.raise_for_status()
-        data = resp.json()
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.get(LEETCODE_API, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
         problems = []
         local_by_id = {p["id"]: p for p in LOCAL_PROBLEMS}
         for item in data.get("stat_status_pairs", []):
@@ -247,20 +249,20 @@ def fetch_problems() -> list[dict]:
     return LOCAL_PROBLEMS
 
 
-def get_problem_by_slug(slug: str) -> Optional[dict]:
+async def get_problem_by_slug(slug: str) -> Optional[dict]:
     """Return a problem dict for the given slug."""
-    problems = fetch_problems()
+    problems = await fetch_problems()
     for p in problems:
         if p.get("url", "").rstrip("/").split("/")[-1] == slug:
             if not p.get("content") or not p.get("codeSnippets"):
-                p.update(fetch_problem_detail(slug))
+                p.update(await fetch_problem_detail(slug))
             return p
     return None
 
 
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, difficulty: Optional[str] = None):
-    problems = fetch_problems()
+    problems = await fetch_problems()
     problem = None
     if difficulty:
         matches = [p for p in problems if p["difficulty"].lower() == difficulty.lower()]
@@ -272,7 +274,7 @@ async def index(request: Request, difficulty: Optional[str] = None):
 
 @app.get("/random")
 async def random_problem(request: Request, difficulty: str = ""):
-    problems = fetch_problems()
+    problems = await fetch_problems()
     matches = [p for p in problems if p["difficulty"].lower() == difficulty.lower()]
     if not matches:
         raise HTTPException(status_code=404, detail="No problems found for difficulty")
@@ -280,7 +282,7 @@ async def random_problem(request: Request, difficulty: str = ""):
     if not problem.get("content"):
         slug = problem.get("url", "").rstrip("/").split("/")[-1]
         if slug:
-            problem.update(fetch_problem_detail(slug))
+            problem.update(await fetch_problem_detail(slug))
     if request.headers.get("accept", "").startswith("text/html"):
         snippets_json = json.dumps(problem.get("codeSnippets", []))
         return HTMLResponse(TEMPLATE.render(problem=problem, snippets_json=snippets_json))
@@ -289,7 +291,7 @@ async def random_problem(request: Request, difficulty: str = ""):
 
 @app.get("/solve/{slug}", response_class=HTMLResponse)
 async def solve_page(slug: str):
-    problem = get_problem_by_slug(slug)
+    problem = await get_problem_by_slug(slug)
     if not problem:
         raise HTTPException(status_code=404, detail="Problem not found")
     snippets_json = json.dumps(problem.get("codeSnippets", []))
