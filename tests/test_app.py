@@ -206,7 +206,7 @@ def test_solve_page_default_snippets(monkeypatch):
     monkeypatch.setattr(app, "fetch_problem_detail", fake_detail)
     response = client.get("/solve/two-sum")
     assert response.status_code == 200
-    assert "Write your solution" in response.text
+    assert "using namespace std" in response.text
 
 
 def test_execute_code_python():

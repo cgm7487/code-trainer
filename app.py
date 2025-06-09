@@ -63,8 +63,8 @@ INDEX_HTML = """
           {% endif %}
           <form id="code-form" class="mt-3">
             <select class="form-select mb-2" name="language">
-              <option value="python">Python</option>
               <option value="cpp">C++</option>
+              <option value="python">Python</option>
               <option value="java">Java</option>
               <option value="go">Go</option>
             </select>
@@ -78,14 +78,18 @@ INDEX_HTML = """
       <script id="snippets-data" type="application/json">{{ snippets_json }}</script>
       <script>
         const snippets = JSON.parse(document.getElementById('snippets-data').textContent || '[]');
+        const langSelect = document.querySelector('#code-form select[name="language"]');
+        const codeInput = document.querySelector('#code-form textarea[name="code"]');
         function fillSnippet() {
-          const lang = document.querySelector('#code-form select[name="language"]').value;
+          const lang = langSelect.value;
           const s = snippets.find(sn => sn.langSlug === lang);
           if (s) {
-            document.querySelector('#code-form textarea[name="code"]').value = s.code;
+            codeInput.value = s.code;
           }
         }
+        langSelect.addEventListener('change', fillSnippet);
         document.getElementById('fill-snippet-btn').addEventListener('click', fillSnippet);
+        fillSnippet();
         document.getElementById('code-form').addEventListener('submit', async (e) => {
           e.preventDefault();
           const code = e.target.code.value;
@@ -125,8 +129,8 @@ SOLVE_HTML = """
       {% endif %}
       <form id=\"code-form\" class=\"mb-3\">
         <select class=\"form-select mb-2\" name=\"language\">
-          <option value=\"python\">Python</option>
           <option value=\"cpp\">C++</option>
+          <option value=\"python\">Python</option>
           <option value=\"java\">Java</option>
           <option value=\"go\">Go</option>
         </select>
@@ -139,14 +143,18 @@ SOLVE_HTML = """
     <script id=\"snippets-data\" type=\"application/json\">{{ snippets_json }}</script>
     <script>
       const snippets = JSON.parse(document.getElementById('snippets-data').textContent || '[]');
+      const langSelect = document.querySelector('#code-form select[name="language"]');
+      const codeInput = document.querySelector('#code-form textarea[name="code"]');
       function fillSnippet() {
-        const lang = document.querySelector('#code-form select[name="language"]').value;
+        const lang = langSelect.value;
         const s = snippets.find(sn => sn.langSlug === lang);
         if (s) {
-          document.querySelector('#code-form textarea[name="code"]').value = s.code;
+          codeInput.value = s.code;
         }
       }
+      langSelect.addEventListener('change', fillSnippet);
       document.getElementById('fill-snippet-btn').addEventListener('click', fillSnippet);
+      fillSnippet();
       document.getElementById('code-form').addEventListener('submit', async (e) => {
         e.preventDefault();
         const code = e.target.code.value;
