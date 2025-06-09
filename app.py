@@ -170,6 +170,11 @@ def fetch_problem_detail(slug: str) -> dict:
         "  question(titleSlug: $titleSlug) {\n"
         "    content\n"
         "    sampleTestCase\n"
+        "    codeSnippets {\n"
+        "      lang\n"
+        "      langSlug\n"
+        "      code\n"
+        "    }\n"
         "  }\n"
         "}"
     )
@@ -183,9 +188,10 @@ def fetch_problem_detail(slug: str) -> dict:
         return {
             "content": q.get("content", ""),
             "sampleTestCase": q.get("sampleTestCase", ""),
+            "codeSnippets": q.get("codeSnippets", []),
         }
     except Exception:
-        return {"content": "", "sampleTestCase": ""}
+        return {"content": "", "sampleTestCase": "", "codeSnippets": []}
 
 
 def fetch_problems() -> list[dict]:
