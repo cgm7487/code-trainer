@@ -277,7 +277,7 @@ async def _run_python(code: str, stdin: str = "") -> dict:
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(stdin.encode()), timeout=5)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(stdin.encode()), timeout=15)
         except asyncio.TimeoutError:
             proc.kill()
             return {"stdout": "", "stderr": "Execution timed out", "returncode": 1}
@@ -364,7 +364,7 @@ async def _run_go(code: str, stdin: str = "") -> dict:
             stderr=asyncio.subprocess.PIPE,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(stdin.encode()), timeout=5)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(stdin.encode()), timeout=15)
         except asyncio.TimeoutError:
             proc.kill()
             return {"stdout": "", "stderr": "Execution timed out", "returncode": 1}
