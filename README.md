@@ -15,6 +15,13 @@ This repository provides a small web application to help you practice LeetCode p
    ```
 3. Open `http://localhost:8000` in your browser and choose a difficulty.
 
+## Online Code Runner
+
+Once you select a problem you can navigate to `/solve/<slug>` (e.g. `/solve/two-sum`)
+to open a simple editor. Write Python code and press **Run Code** to execute it
+server‑side. The `/execute` API endpoint runs the submitted code using the local
+Python interpreter and returns the output.
+
 ## Docker
 
 You can also run the application using Docker Compose:

@@ -145,3 +145,16 @@ def test_random_problem_fetch_detail(monkeypatch):
     response = client.get("/random?difficulty=Hard", headers={"accept": "text/html"})
     assert response.status_code == 200
     assert "Some description" in response.text
+
+
+def test_solve_page(monkeypatch):
+    monkeypatch.setattr(app, "fetch_problems", lambda: app.LOCAL_PROBLEMS)
+    response = client.get("/solve/two-sum")
+    assert response.status_code == 200
+    assert "textarea" in response.text
+
+
+def test_execute_code():
+    response = client.post("/execute", json={"code": "print('hi')"})
+    assert response.status_code == 200
+    assert response.json()["stdout"].strip() == "hi"
