@@ -37,4 +37,14 @@ You can also run the application using Docker Compose:
 docker compose up --build
 ```
 
+## Running Tests
+
+Run the unit tests with:
+
+```bash
+pip install -r requirements.txt && pytest
+```
+
+The default code template can be inspected in the page's `snippets-data` script tag or verified via the `test_generate_template_fallback` test.
+
 The fallback problems are defined in `problems.json`. Feel free to extend this file with more LeetCode problems.
