@@ -33,10 +33,10 @@ INDEX_HTML = """
   <body class="bg-light">
     <div class="container py-5">
       <h1 class="mb-2 text-center">Code Trainer</h1>
-      <h2 class="mb-4 text-center">Select Difficulty</h2>
       <form class="row g-3 justify-content-center" action="/random" method="get">
         <div class="col-auto">
-          <select class="form-select" name="difficulty">
+          <label for="difficulty-select" class="form-label me-2">Select Difficulty</label>
+          <select id="difficulty-select" class="form-select" name="difficulty">
             <option value="Easy">Easy</option>
             <option value="Medium">Medium</option>
             <option value="Hard">Hard</option>
