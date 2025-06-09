@@ -14,14 +14,17 @@ import app
 client = TestClient(app.app)
 
 
-def test_fetch_problems_fallback(monkeypatch):
-    def fake_get(*args, **kwargs):
+@pytest.mark.asyncio
+async def test_fetch_problems_fallback(monkeypatch):
+    async def fake_get(self, *args, **kwargs):
         raise httpx.RequestError("fail")
-    monkeypatch.setattr(httpx, "get", fake_get)
-    assert app.fetch_problems() == app.LOCAL_PROBLEMS
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    assert await app.fetch_problems() == app.LOCAL_PROBLEMS
 
 
-def test_fetch_problems_remote(monkeypatch):
+@pytest.mark.asyncio
+async def test_fetch_problems_remote(monkeypatch):
     sample = {
         "stat_status_pairs": [
             {
@@ -42,9 +45,12 @@ def test_fetch_problems_remote(monkeypatch):
         def raise_for_status(self):
             pass
 
-    monkeypatch.setattr(httpx, "get", lambda *a, **k: FakeResp())
+    async def fake_get(self, *a, **k):
+        return FakeResp()
 
-    problems = app.fetch_problems()
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+
+    problems = await app.fetch_problems()
     assert problems == [
         {
             "id": 123,
@@ -55,7 +61,8 @@ def test_fetch_problems_remote(monkeypatch):
     ]
 
 
-def test_fetch_problems_remote_enrich(monkeypatch):
+@pytest.mark.asyncio
+async def test_fetch_problems_remote_enrich(monkeypatch):
     sample = {
         "stat_status_pairs": [
             {
@@ -76,21 +83,30 @@ def test_fetch_problems_remote_enrich(monkeypatch):
         def raise_for_status(self):
             pass
 
-    monkeypatch.setattr(httpx, "get", lambda *a, **k: FakeResp())
-    problems = app.fetch_problems()
+    async def fake_get(self, *a, **k):
+        return FakeResp()
+
+    monkeypatch.setattr(httpx.AsyncClient, "get", fake_get)
+    problems = await app.fetch_problems()
     assert problems[0]["content"]
     assert problems[0]["sampleTestCase"]
 
 
+def _async_return(value):
+    async def _inner(*args, **kwargs):
+        return value
+    return _inner
+
+
 def test_index_no_difficulty(monkeypatch):
-    monkeypatch.setattr(app, "fetch_problems", lambda: app.LOCAL_PROBLEMS)
+    monkeypatch.setattr(app, "fetch_problems", _async_return(app.LOCAL_PROBLEMS))
     response = client.get("/")
     assert response.status_code == 200
     assert "Select Difficulty" in response.text
 
 
 def test_index_with_difficulty(monkeypatch):
-    monkeypatch.setattr(app, "fetch_problems", lambda: app.LOCAL_PROBLEMS)
+    monkeypatch.setattr(app, "fetch_problems", _async_return(app.LOCAL_PROBLEMS))
     monkeypatch.setattr(random, "choice", lambda seq: seq[0])
     response = client.get("/?difficulty=Easy")
     assert response.status_code == 200
@@ -99,7 +115,7 @@ def test_index_with_difficulty(monkeypatch):
 
 
 def test_random_problem_json(monkeypatch):
-    monkeypatch.setattr(app, "fetch_problems", lambda: app.LOCAL_PROBLEMS)
+    monkeypatch.setattr(app, "fetch_problems", _async_return(app.LOCAL_PROBLEMS))
     monkeypatch.setattr(random, "choice", lambda seq: seq[0])
     response = client.get("/random?difficulty=Easy")
     assert response.status_code == 200
@@ -107,7 +123,7 @@ def test_random_problem_json(monkeypatch):
 
 
 def test_random_problem_html(monkeypatch):
-    monkeypatch.setattr(app, "fetch_problems", lambda: app.LOCAL_PROBLEMS)
+    monkeypatch.setattr(app, "fetch_problems", _async_return(app.LOCAL_PROBLEMS))
     monkeypatch.setattr(random, "choice", lambda seq: seq[0])
     response = client.get("/random?difficulty=Easy", headers={"accept": "text/html"})
     assert response.status_code == 200
@@ -117,7 +133,7 @@ def test_random_problem_html(monkeypatch):
 
 
 def test_random_problem_not_found(monkeypatch):
-    monkeypatch.setattr(app, "fetch_problems", lambda: app.LOCAL_PROBLEMS)
+    monkeypatch.setattr(app, "fetch_problems", _async_return(app.LOCAL_PROBLEMS))
     response = client.get("/random?difficulty=Impossible")
     assert response.status_code == 404
 
@@ -134,10 +150,10 @@ def test_random_problem_fetch_detail(monkeypatch):
         }
     ]
 
-    monkeypatch.setattr(app, "fetch_problems", lambda: problems)
+    monkeypatch.setattr(app, "fetch_problems", _async_return(problems))
     monkeypatch.setattr(random, "choice", lambda seq: seq[0])
 
-    def fake_detail(slug):
+    async def fake_detail(slug):
         assert slug == "burst-balloons"
         return {"content": "Some description", "sampleTestCase": "case"}
 
@@ -148,17 +164,21 @@ def test_random_problem_fetch_detail(monkeypatch):
 
 
 def test_solve_page(monkeypatch):
-    monkeypatch.setattr(app, "fetch_problems", lambda: app.LOCAL_PROBLEMS)
-    monkeypatch.setattr(app, "fetch_problem_detail", lambda slug: {"codeSnippets": [{"lang": "Python3", "langSlug": "python", "code": "print('hi')"}]})
+    monkeypatch.setattr(app, "fetch_problems", _async_return(app.LOCAL_PROBLEMS))
+
+    async def fake_detail(slug):
+        return {"codeSnippets": [{"lang": "Python3", "langSlug": "python", "code": "print('hi')"}]}
+
+    monkeypatch.setattr(app, "fetch_problem_detail", fake_detail)
     response = client.get("/solve/two-sum")
     assert response.status_code == 200
     assert "textarea" in response.text
 
 
 def test_solve_page_contains_snippet(monkeypatch):
-    monkeypatch.setattr(app, "fetch_problems", lambda: app.LOCAL_PROBLEMS)
+    monkeypatch.setattr(app, "fetch_problems", _async_return(app.LOCAL_PROBLEMS))
 
-    def fake_detail(slug):
+    async def fake_detail(slug):
         return {
             "content": "desc",
             "sampleTestCase": "",
@@ -209,7 +229,8 @@ def test_execute_with_sample_case():
     assert data["passed"] is True
 
 
-def test_fetch_problem_detail_snippets(monkeypatch):
+@pytest.mark.asyncio
+async def test_fetch_problem_detail_snippets(monkeypatch):
     sample = {
         "data": {
             "question": {
@@ -229,7 +250,10 @@ def test_fetch_problem_detail_snippets(monkeypatch):
         def raise_for_status(self):
             pass
 
-    monkeypatch.setattr(httpx, "post", lambda *a, **k: FakeResp())
-    detail = app.fetch_problem_detail("two-sum")
+    async def fake_post(self, *a, **k):
+        return FakeResp()
+
+    monkeypatch.setattr(httpx.AsyncClient, "post", fake_post)
+    detail = await app.fetch_problem_detail("two-sum")
     assert detail["codeSnippets"]
     assert detail["codeSnippets"][0]["langSlug"] == "python"
