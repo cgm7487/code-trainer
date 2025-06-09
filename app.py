@@ -1,5 +1,9 @@
 import json
 import random
+import asyncio
+import os
+import sys
+import tempfile
 from typing import Optional
 
 import httpx
@@ -63,7 +67,39 @@ INDEX_HTML = """
 </html>
 """
 
+SOLVE_HTML = """
+<!doctype html>
+<html lang=\"en\">
+  <head>
+    <meta charset=\"utf-8\">
+    <title>Solve Problem</title>
+    <link href=\"https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css\" rel=\"stylesheet\">
+  </head>
+  <body class=\"bg-light\">
+    <div class=\"container py-5\">
+      <h1 class=\"mb-4\">{{ problem.title }}</h1>
+      <div class=\"mb-3\">{{ problem.content or 'No description available.' }}</div>
+      <form id=\"code-form\" class=\"mb-3\">
+        <textarea class=\"form-control\" name=\"code\" rows=\"10\" placeholder=\"print('hello')\"></textarea>
+        <button type=\"submit\" class=\"btn btn-primary mt-3\">Run Code</button>
+      </form>
+      <pre id=\"output\" class=\"bg-dark text-white p-3\"></pre>
+    </div>
+    <script>
+      document.getElementById('code-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const code = e.target.code.value;
+        const resp = await fetch('/execute', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({code})});
+        const data = await resp.json();
+        document.getElementById('output').textContent = data.stdout + data.stderr;
+      });
+    </script>
+  </body>
+</html>
+"""
+
 TEMPLATE = Template(INDEX_HTML)
+SOLVE_TEMPLATE = Template(SOLVE_HTML)
 
 
 def fetch_problem_detail(slug: str) -> dict:
@@ -122,6 +158,17 @@ def fetch_problems() -> list[dict]:
     return LOCAL_PROBLEMS
 
 
+def get_problem_by_slug(slug: str) -> Optional[dict]:
+    """Return a problem dict for the given slug."""
+    problems = fetch_problems()
+    for p in problems:
+        if p.get("url", "").rstrip("/").split("/")[-1] == slug:
+            if not p.get("content"):
+                p.update(fetch_problem_detail(slug))
+            return p
+    return None
+
+
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request, difficulty: Optional[str] = None):
     problems = fetch_problems()
@@ -147,6 +194,40 @@ async def random_problem(request: Request, difficulty: str = ""):
     if request.headers.get("accept", "").startswith("text/html"):
         return HTMLResponse(TEMPLATE.render(problem=problem))
     return problem
+
+
+@app.get("/solve/{slug}", response_class=HTMLResponse)
+async def solve_page(slug: str):
+    problem = get_problem_by_slug(slug)
+    if not problem:
+        raise HTTPException(status_code=404, detail="Problem not found")
+    return HTMLResponse(SOLVE_TEMPLATE.render(problem=problem))
+
+
+@app.post("/execute")
+async def execute_code(request: Request):
+    data = await request.json()
+    code = data.get("code", "")
+    with tempfile.NamedTemporaryFile("w+", suffix=".py", delete=False) as tmp:
+        tmp.write(code)
+        tmp.flush()
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable,
+            tmp.name,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=5)
+        except asyncio.TimeoutError:
+            proc.kill()
+            return {"stdout": "", "stderr": "Execution timed out", "returncode": 1}
+    os.unlink(tmp.name)
+    return {
+        "stdout": stdout.decode(),
+        "stderr": stderr.decode(),
+        "returncode": proc.returncode,
+    }
 
 
 if __name__ == "__main__":
