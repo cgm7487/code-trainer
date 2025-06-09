@@ -217,7 +217,40 @@ async def fetch_problem_detail(slug: str) -> dict:
         return {"content": "", "sampleTestCase": "", "codeSnippets": []}
 
 
+async def fetch_problem_detail_async(slug: str) -> dict:
+    """Asynchronously retrieve problem content and code snippets from LeetCode."""
+    query = (
+        "query getQuestion($titleSlug: String!) {\n"
+        "  question(titleSlug: $titleSlug) {\n"
+        "    content\n"
+        "    sampleTestCase\n"
+        "    codeSnippets {\n"
+        "      lang\n"
+        "      langSlug\n"
+        "      code\n"
+        "    }\n"
+        "  }\n"
+        "}"
+    )
+    payload = {"query": query, "variables": {"titleSlug": slug}}
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(GRAPHQL_API, json=payload, headers=headers)
+            resp.raise_for_status()
+            data = resp.json()
+            q = data.get("data", {}).get("question", {})
+            return {
+                "content": q.get("content", ""),
+                "sampleTestCase": q.get("sampleTestCase", ""),
+                "codeSnippets": q.get("codeSnippets", []),
+            }
+    except Exception:
+        return {"content": "", "sampleTestCase": "", "codeSnippets": []}
+
+
 async def fetch_problems() -> list[dict]:
+
     """Fetch the list of problems from LeetCode or fallback to local data."""
     try:
         headers = {"User-Agent": "Mozilla/5.0"}
@@ -267,7 +300,13 @@ async def index(request: Request, difficulty: Optional[str] = None):
     if difficulty:
         matches = [p for p in problems if p["difficulty"].lower() == difficulty.lower()]
         if matches:
-            problem = random.choice(matches)
+            problem = random.choice(matches).copy()
+            if not problem.get("content") or not problem.get("codeSnippets"):
+                slug = problem.get("url", "").rstrip("/").split("/")[-1]
+                if slug:
+                    detail = await fetch_problem_detail_async(slug)
+                    if detail.get("content") or detail.get("codeSnippets"):
+                        problem.update(detail)
     snippets_json = json.dumps(problem.get("codeSnippets", [])) if problem else "[]"
     return HTMLResponse(TEMPLATE.render(problem=problem, snippets_json=snippets_json))
 
