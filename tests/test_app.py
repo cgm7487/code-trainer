@@ -2,6 +2,7 @@ import sys
 from pathlib import Path
 import httpx
 import random
+import asyncio
 from fastapi.testclient import TestClient
 import pytest
 
@@ -227,6 +228,25 @@ def test_execute_with_sample_case():
     data = resp.json()
     assert data["stdout"].strip() == "4"
     assert data["passed"] is True
+
+
+def test_generate_template_from_snippet():
+    problem = {"codeSnippets": [{"lang": "Python", "langSlug": "python", "code": "print('x')"}]}
+    assert app.generate_template(problem, "python") == "print('x')"
+
+
+def test_generate_template_fallback():
+    assert "Write your solution" in app.generate_template({}, "python")
+
+
+def test_run_code_dispatch_python():
+    result = asyncio.run(app.run_code("python", "print('hi')"))
+    assert result["stdout"].strip() == "hi"
+
+
+def test_run_code_unsupported():
+    result = asyncio.run(app.run_code("ruby", "puts 'hi'"))
+    assert result["stderr"] == "Unsupported language"
 
 
 @pytest.mark.asyncio
