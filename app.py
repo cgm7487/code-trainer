@@ -30,6 +30,10 @@ INDEX_HTML = """
 {% if problem %}
 <h2>{{ problem.title }} ({{ problem.difficulty }})</h2>
 <p><a href="{{ problem.url }}" target="_blank">{{ problem.url }}</a></p>
+<div>{{ problem.content or "No description available." }}</div>
+{% if problem.sampleTestCase %}
+<pre>{{ problem.sampleTestCase }}</pre>
+{% endif %}
 {% endif %}
 """
 
