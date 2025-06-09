@@ -68,6 +68,7 @@ def test_index_with_difficulty(monkeypatch):
     response = client.get("/?difficulty=Easy")
     assert response.status_code == 200
     assert "Two Sum" in response.text
+    assert "indices of the two numbers" in response.text
 
 
 def test_random_problem_json(monkeypatch):
@@ -85,6 +86,7 @@ def test_random_problem_html(monkeypatch):
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
     assert "Two Sum" in response.text
+    assert "Input: nums" in response.text
 
 
 def test_random_problem_not_found(monkeypatch):
