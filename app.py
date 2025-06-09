@@ -108,7 +108,7 @@ INDEX_HTML = """
             <option value="go">Go</option>
           </select>
           <textarea id="code-editor" name="code" rows="10" placeholder="print('hello')"></textarea>
-          <button type="button" id="fill-snippet-btn" class="btn btn-outline-primary me-2">Start Code</button>
+          <button type="button" id="reset-code-btn" class="btn btn-outline-primary me-2">Reset</button>
           <button type="submit" class="btn btn-primary">Run Code</button>
         </form>
         <pre id="output" class="bg-dark text-white p-3 mt-3"></pre>
@@ -131,7 +131,7 @@ INDEX_HTML = """
           if(s){codeInput.value=s.code;}
         }
         langSelect.addEventListener('change',fillSnippet);
-        document.getElementById('fill-snippet-btn').addEventListener('click',fillSnippet);
+        document.getElementById('reset-code-btn').addEventListener('click',fillSnippet);
         fillSnippet();
         document.getElementById('code-form').addEventListener('submit',async(e)=>{
           e.preventDefault();
