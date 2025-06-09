@@ -179,3 +179,12 @@ def test_execute_code_go():
     resp = client.post("/execute", json={"code": code, "language": "go"})
     assert resp.status_code == 200
     assert resp.json()["stdout"].strip() == "hi"
+
+
+def test_execute_with_sample_case():
+    code = "print(int(input()) * 2)"
+    sample = "Input: 2\nOutput: 4"
+    resp = client.post("/execute", json={"code": code, "language": "python", "sampleCase": sample})
+    data = resp.json()
+    assert data["stdout"].strip() == "4"
+    assert data["passed"] is True
