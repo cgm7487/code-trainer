@@ -1,13 +1,20 @@
 import json
 import random
-from flask import Flask, jsonify, request, render_template_string
+from typing import Optional
 
-app = Flask(__name__)
+import httpx
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
+from jinja2 import Template
 
-with open('problems.json') as f:
-    PROBLEMS = json.load(f)
+app = FastAPI()
 
-# index page template
+# Load problems from local file as a fallback
+with open("problems.json") as f:
+    LOCAL_PROBLEMS = json.load(f)
+
+LEETCODE_API = "https://leetcode.com/api/problems/all/"
+
 INDEX_HTML = """
 <!doctype html>
 <title>LeetCode Random Selector</title>
@@ -26,27 +33,60 @@ INDEX_HTML = """
 {% endif %}
 """
 
-@app.route('/')
-def index():
-    difficulty = request.args.get('difficulty')
+TEMPLATE = Template(INDEX_HTML)
+
+
+def fetch_problems() -> list[dict]:
+    """Fetch the list of problems from LeetCode or fallback to local data."""
+    try:
+        headers = {"User-Agent": "Mozilla/5.0"}
+        resp = httpx.get(LEETCODE_API, headers=headers, timeout=10.0)
+        resp.raise_for_status()
+        data = resp.json()
+        problems = []
+        for item in data.get("stat_status_pairs", []):
+            stat = item.get("stat", {})
+            problems.append(
+                {
+                    "id": stat.get("frontend_question_id"),
+                    "title": stat.get("question__title"),
+                    "difficulty": ["", "Easy", "Medium", "Hard"][
+                        item.get("difficulty", {}).get("level", 0)
+                    ],
+                    "url": f"https://leetcode.com/problems/{stat.get('question__title_slug')}/",
+                }
+            )
+        if problems:
+            return problems
+    except Exception:
+        pass
+    return LOCAL_PROBLEMS
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index(request: Request, difficulty: Optional[str] = None):
+    problems = fetch_problems()
     problem = None
     if difficulty:
-        matches = [p for p in PROBLEMS if p['difficulty'].lower() == difficulty.lower()]
+        matches = [p for p in problems if p["difficulty"].lower() == difficulty.lower()]
         if matches:
             problem = random.choice(matches)
-    return render_template_string(INDEX_HTML, problem=problem)
+    return HTMLResponse(TEMPLATE.render(problem=problem))
 
-@app.route('/random')
-def random_problem():
-    difficulty = request.args.get('difficulty', '')
-    matches = [p for p in PROBLEMS if p['difficulty'].lower() == difficulty.lower()]
+
+@app.get("/random")
+async def random_problem(request: Request, difficulty: str = ""):
+    problems = fetch_problems()
+    matches = [p for p in problems if p["difficulty"].lower() == difficulty.lower()]
     if not matches:
-        return jsonify({'error': 'No problems found for difficulty'}), 404
+        raise HTTPException(status_code=404, detail="No problems found for difficulty")
     problem = random.choice(matches)
-    # For index page uses this route via GET to display results.
-    if request.accept_mimetypes.accept_html:
-        return render_template_string(INDEX_HTML, problem=problem)
-    return jsonify(problem)
+    if request.headers.get("accept", "").startswith("text/html"):
+        return HTMLResponse(TEMPLATE.render(problem=problem))
+    return problem
 
-if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(app, host="0.0.0.0", port=8000)
