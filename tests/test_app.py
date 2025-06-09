@@ -188,3 +188,29 @@ def test_execute_with_sample_case():
     data = resp.json()
     assert data["stdout"].strip() == "4"
     assert data["passed"] is True
+
+
+def test_fetch_problem_detail_snippets(monkeypatch):
+    sample = {
+        "data": {
+            "question": {
+                "content": "desc",
+                "sampleTestCase": "case",
+                "codeSnippets": [
+                    {"lang": "Python3", "langSlug": "python", "code": "class Solution:"}
+                ],
+            }
+        }
+    }
+
+    class FakeResp:
+        def json(self):
+            return sample
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(httpx, "post", lambda *a, **k: FakeResp())
+    detail = app.fetch_problem_detail("two-sum")
+    assert detail["codeSnippets"]
+    assert detail["codeSnippets"][0]["langSlug"] == "python"
