@@ -55,6 +55,33 @@ def test_fetch_problems_remote(monkeypatch):
     ]
 
 
+def test_fetch_problems_remote_enrich(monkeypatch):
+    sample = {
+        "stat_status_pairs": [
+            {
+                "stat": {
+                    "frontend_question_id": 1,
+                    "question__title": "Two Sum",
+                    "question__title_slug": "two-sum",
+                },
+                "difficulty": {"level": 1},
+            }
+        ]
+    }
+
+    class FakeResp:
+        def json(self):
+            return sample
+
+        def raise_for_status(self):
+            pass
+
+    monkeypatch.setattr(httpx, "get", lambda *a, **k: FakeResp())
+    problems = app.fetch_problems()
+    assert problems[0]["content"]
+    assert problems[0]["sampleTestCase"]
+
+
 def test_index_no_difficulty(monkeypatch):
     monkeypatch.setattr(app, "fetch_problems", lambda: app.LOCAL_PROBLEMS)
     response = client.get("/")

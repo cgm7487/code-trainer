@@ -48,18 +48,22 @@ def fetch_problems() -> list[dict]:
         resp.raise_for_status()
         data = resp.json()
         problems = []
+        local_by_id = {p["id"]: p for p in LOCAL_PROBLEMS}
         for item in data.get("stat_status_pairs", []):
             stat = item.get("stat", {})
-            problems.append(
-                {
-                    "id": stat.get("frontend_question_id"),
-                    "title": stat.get("question__title"),
-                    "difficulty": ["", "Easy", "Medium", "Hard"][
-                        item.get("difficulty", {}).get("level", 0)
-                    ],
-                    "url": f"https://leetcode.com/problems/{stat.get('question__title_slug')}/",
-                }
-            )
+            pid = stat.get("frontend_question_id")
+            entry = {
+                "id": pid,
+                "title": stat.get("question__title"),
+                "difficulty": ["", "Easy", "Medium", "Hard"][
+                    item.get("difficulty", {}).get("level", 0)
+                ],
+                "url": f"https://leetcode.com/problems/{stat.get('question__title_slug')}/",
+            }
+            if pid in local_by_id:
+                entry["content"] = local_by_id[pid].get("content", "")
+                entry["sampleTestCase"] = local_by_id[pid].get("sampleTestCase", "")
+            problems.append(entry)
         if problems:
             return problems
     except Exception:
