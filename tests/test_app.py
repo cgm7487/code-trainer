@@ -194,6 +194,21 @@ def test_solve_page_contains_snippet(monkeypatch):
     assert "print('hi')" in response.text
 
 
+def test_solve_page_default_snippets(monkeypatch):
+    import copy, json
+    with open("problems.json") as f:
+        original = json.load(f)
+    monkeypatch.setattr(app, "fetch_problems", _async_return(copy.deepcopy(original)))
+
+    async def fake_detail(slug):
+        return {"content": "desc", "sampleTestCase": "", "codeSnippets": []}
+
+    monkeypatch.setattr(app, "fetch_problem_detail", fake_detail)
+    response = client.get("/solve/two-sum")
+    assert response.status_code == 200
+    assert "Write your solution" in response.text
+
+
 def test_execute_code_python():
     response = client.post("/execute", json={"code": "print('hi')", "language": "python"})
     assert response.status_code == 200
