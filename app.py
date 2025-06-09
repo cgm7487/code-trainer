@@ -448,6 +448,35 @@ async def _run_go(code: str, stdin: str = "") -> dict:
     }
 
 
+def generate_template(problem: dict, language: str) -> str:
+    """Return the code template for a given problem and language."""
+    lang = language.lower()
+    for snippet in problem.get("codeSnippets", []):
+        if snippet.get("langSlug", "").lower() == lang:
+            return snippet.get("code", "")
+    defaults = {
+        "python": "# Write your solution here\n",
+        "cpp": "#include <bits/stdc++.h>\nusing namespace std;\nint main() {\n    return 0;\n}\n",
+        "java": "public class Main {\n    public static void main(String[] args) {\n    }\n}\n",
+        "go": "package main\nfunc main() {\n}\n",
+    }
+    return defaults.get(lang, "")
+
+
+async def run_code(language: str, code: str, stdin: str = "") -> dict:
+    """Dispatch execution to the correct runtime based on language."""
+    lang = language.lower()
+    if lang == "python":
+        return await _run_python(code, stdin)
+    if lang in {"cpp", "c++"}:
+        return await _run_cpp(code, stdin)
+    if lang == "java":
+        return await _run_java(code, stdin)
+    if lang == "go":
+        return await _run_go(code, stdin)
+    return {"stdout": "", "stderr": "Unsupported language", "returncode": 1}
+
+
 @app.post("/execute")
 async def execute_code(request: Request):
     data = await request.json()
@@ -456,16 +485,7 @@ async def execute_code(request: Request):
     sample_case = data.get("sampleCase", "")
     input_data, expected = parse_sample_test_case(sample_case)
     stdin = input_data + "\n" if input_data else ""
-    if language == "python":
-        result = await _run_python(code, stdin)
-    elif language in {"cpp", "c++"}:
-        result = await _run_cpp(code, stdin)
-    elif language == "java":
-        result = await _run_java(code, stdin)
-    elif language == "go":
-        result = await _run_go(code, stdin)
-    else:
-        result = {"stdout": "", "stderr": "Unsupported language", "returncode": 1}
+    result = await run_code(language, code, stdin)
     if expected:
         result["passed"] = result.get("returncode") == 0 and result.get("stdout", "").strip() == expected
     return result
