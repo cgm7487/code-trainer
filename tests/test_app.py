@@ -154,7 +154,28 @@ def test_solve_page(monkeypatch):
     assert "textarea" in response.text
 
 
-def test_execute_code():
-    response = client.post("/execute", json={"code": "print('hi')"})
+def test_execute_code_python():
+    response = client.post("/execute", json={"code": "print('hi')", "language": "python"})
     assert response.status_code == 200
     assert response.json()["stdout"].strip() == "hi"
+
+
+def test_execute_code_cpp():
+    code = "#include <iostream>\nint main(){std::cout<<\"hi\";return 0;}"
+    resp = client.post("/execute", json={"code": code, "language": "cpp"})
+    assert resp.status_code == 200
+    assert resp.json()["stdout"].strip() == "hi"
+
+
+def test_execute_code_java():
+    code = "public class Main { public static void main(String[] args){ System.out.println(\"hi\"); } }"
+    resp = client.post("/execute", json={"code": code, "language": "java"})
+    assert resp.status_code == 200
+    assert resp.json()["stdout"].strip() == "hi"
+
+
+def test_execute_code_go():
+    code = "package main\nimport \"fmt\"\nfunc main(){fmt.Print(\"hi\")}"
+    resp = client.post("/execute", json={"code": code, "language": "go"})
+    assert resp.status_code == 200
+    assert resp.json()["stdout"].strip() == "hi"

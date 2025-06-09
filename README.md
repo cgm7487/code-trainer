@@ -17,10 +17,10 @@ This repository provides a small web application to help you practice LeetCode p
 
 ## Online Code Runner
 
-Once you select a problem you can navigate to `/solve/<slug>` (e.g. `/solve/two-sum`)
-to open a simple editor. Write Python code and press **Run Code** to execute it
-server‑side. The `/execute` API endpoint runs the submitted code using the local
-Python interpreter and returns the output.
+Once you select a problem you can run code directly on the problem page. Select
+the desired language (Python, C++, Java or Go), write your solution and press
+**Run Code**. The `/execute` endpoint will compile/execute the submitted code
+with the corresponding local interpreter and return the output.
 
 ## Docker
 
