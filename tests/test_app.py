@@ -191,7 +191,11 @@ def test_solve_page_contains_snippet(monkeypatch):
     monkeypatch.setattr(app, "fetch_problem_detail", fake_detail)
     response = client.get("/solve/two-sum")
     assert response.status_code == 200
-    assert "print('hi')" in response.text
+    import re, json
+    m = re.search(r'id="snippets-data" type="application/json">(.*?)</script>', response.text)
+    assert m, 'snippets-data script not found'
+    data = json.loads(m.group(1))
+    assert any(sn["code"] == "print('hi')" for sn in data)
 
 
 def test_solve_page_default_snippets(monkeypatch):

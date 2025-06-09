@@ -75,9 +75,15 @@ INDEX_HTML = """
           <pre id="output" class="bg-dark text-white p-3"></pre>
         </div>
       </div>
-      <script id="snippets-data" type="application/json">{{ snippets_json }}</script>
+      <script id="snippets-data" type="application/json">{{ snippets_json | tojson | safe }}</script>
       <script>
-        const snippets = JSON.parse(document.getElementById('snippets-data').textContent || '[]');
+        let snippets = [];
+        try {
+          const raw = document.getElementById('snippets-data')?.textContent || '[]';
+          snippets = JSON.parse(raw);
+        } catch (e) {
+          console.error('Failed to parse snippets JSON:', e);
+        }
         const langSelect = document.querySelector('#code-form select[name="language"]');
         const codeInput = document.querySelector('#code-form textarea[name="code"]');
         function fillSnippet() {
@@ -140,9 +146,15 @@ SOLVE_HTML = """
       </form>
       <pre id=\"output\" class=\"bg-dark text-white p-3\"></pre>
     </div>
-    <script id=\"snippets-data\" type=\"application/json\">{{ snippets_json }}</script>
+    <script id=\"snippets-data\" type=\"application/json\">{{ snippets_json | tojson | safe }}</script>
     <script>
-      const snippets = JSON.parse(document.getElementById('snippets-data').textContent || '[]');
+      let snippets = [];
+      try {
+        const raw = document.getElementById('snippets-data')?.textContent || '[]';
+        snippets = JSON.parse(raw);
+      } catch (e) {
+        console.error('Failed to parse snippets JSON:', e);
+      }
       const langSelect = document.querySelector('#code-form select[name="language"]');
       const codeInput = document.querySelector('#code-form textarea[name="code"]');
       function fillSnippet() {
@@ -286,7 +298,7 @@ async def index(request: Request, difficulty: Optional[str] = None):
                     if detail.get("content") or detail.get("codeSnippets"):
                         problem.update(detail)
     if problem:
-        snippets = problem.get("codeSnippets", [])
+        snippets = problem.get("codeSnippets") or []
         if not snippets:
             snippets = [
                 {"lang": "Python3", "langSlug": "python", "code": generate_template(problem, "python")},
@@ -294,9 +306,10 @@ async def index(request: Request, difficulty: Optional[str] = None):
                 {"lang": "Java", "langSlug": "java", "code": generate_template(problem, "java")},
                 {"lang": "Go", "langSlug": "go", "code": generate_template(problem, "go")},
             ]
-        snippets_json = json.dumps(snippets)
+            problem["codeSnippets"] = snippets
+        snippets_json = snippets
     else:
-        snippets_json = "[]"
+        snippets_json = []
     return HTMLResponse(TEMPLATE.render(problem=problem, snippets_json=snippets_json))
 
 
@@ -312,7 +325,7 @@ async def random_problem(request: Request, difficulty: str = ""):
         if slug:
             problem.update(await fetch_problem_detail(slug))
     if request.headers.get("accept", "").startswith("text/html"):
-        snippets_json = json.dumps(problem.get("codeSnippets", []))
+        snippets_json = problem.get("codeSnippets") or []
         return HTMLResponse(TEMPLATE.render(problem=problem, snippets_json=snippets_json))
     return problem
 
@@ -322,7 +335,7 @@ async def solve_page(slug: str):
     problem = await get_problem_by_slug(slug)
     if not problem:
         raise HTTPException(status_code=404, detail="Problem not found")
-    snippets = problem.get("codeSnippets", [])
+    snippets = problem.get("codeSnippets") or []
     if not snippets:
         snippets = [
             {"lang": "Python3", "langSlug": "python", "code": generate_template(problem, "python")},
@@ -330,7 +343,8 @@ async def solve_page(slug: str):
             {"lang": "Java", "langSlug": "java", "code": generate_template(problem, "java")},
             {"lang": "Go", "langSlug": "go", "code": generate_template(problem, "go")},
         ]
-    snippets_json = json.dumps(snippets)
+        problem["codeSnippets"] = snippets
+    snippets_json = snippets
     return HTMLResponse(SOLVE_TEMPLATE.render(problem=problem, snippets_json=snippets_json))
 
 
