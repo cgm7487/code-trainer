@@ -23,59 +23,190 @@ GRAPHQL_API = "https://leetcode.com/graphql"
 
 INDEX_HTML = """
 <!doctype html>
-<html lang="en">
+<html lang=\"en\">
   <head>
-    <meta charset="utf-8">
+    <meta charset=\"utf-8\">
     <title>Code Trainer</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, \"Segoe UI\", Roboto, \"Helvetica Neue\", Arial, sans-serif;
+        background-color: #f4f7f9;
+        color: #333;
+        line-height: 1.7;
+        margin: 0;
+        padding: 20px;
+        display: flex;
+        justify-content: center;
+        align-items: flex-start;
+        min-height: 100vh;
+      }
+      .container {
+        width: 100%;
+        max-width: 960px;
+        background-color: #fff;
+        padding: 2rem;
+        border-radius: 12px;
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.08);
+        box-sizing: border-box;
+      }
+      header {
+        text-align: center;
+        border-bottom: 1px solid #e0e0e0;
+        padding-bottom: 20px;
+        margin-bottom: 30px;
+      }
+      header h1 {
+        color: #007aff;
+        margin: 0 0 10px 0;
+        font-size: 2em;
+      }
+      header p {
+        color: #666;
+        font-size: 1.1em;
+      }
+      .controls {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 20px;
+        margin-bottom: 40px;
+        flex-wrap: wrap;
+      }
+      .controls label {
+        font-size: 1em;
+        font-weight: 500;
+      }
+      #difficulty-select {
+        padding: 12px 15px;
+        font-size: 1em;
+        border-radius: 8px;
+        border: 1px solid #ccc;
+        background-color: #fff;
+      }
+      #get-problem-btn {
+        padding: 12px 25px;
+        font-size: 1em;
+        font-weight: 600;
+        color: #fff;
+        background: linear-gradient(45deg, #28a745, #218838);
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        box-shadow: 0 4px 15px rgba(40, 167, 69, 0.2);
+      }
+      #get-problem-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(40, 167, 69, 0.3);
+      }
+      #get-problem-btn:active {
+        transform: translateY(0);
+      }
+      .content-section {
+        margin-top: 25px;
+        padding: 25px;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        background-color: #fdfdfd;
+      }
+      .title-bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid #eee;
+        padding-bottom: 10px;
+        margin-bottom: 15px;
+      }
+      .title-bar h2, .title-bar h3 { margin: 0; padding: 0; border: none; }
+      #go-to-problem-link {
+        font-size: 0.8em;
+        padding: 6px 12px;
+        background-color: #007aff;
+        color: white;
+        text-decoration: none;
+        border-radius: 5px;
+        transition: background-color 0.2s;
+      }
+      #go-to-problem-link:hover { background-color: #0056b3; }
+      #copy-code-btn {
+        padding: 6px 12px;
+        font-size: 0.8em;
+        background-color: #6c757d;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+      }
+      #copy-code-btn:hover { background-color: #5a6268; }
+      #copy-feedback { font-size: 0.8em; color: #28a745; font-weight: bold; }
+      #code-editor {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 15px;
+        font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+        font-size: 15px;
+        border: 1px solid #3c3c3c;
+        border-radius: 8px;
+        background-color: #2b2b2b;
+        color: #a9b7c6;
+        resize: vertical;
+        min-height: 300px;
+        line-height: 1.5;
+      }
+      #code-editor:focus { outline: 2px solid #007aff; outline-offset: 2px; }
+      .hidden { display: none; }
+    </style>
   </head>
-  <body class="bg-light">
-    <div class="container py-5">
-      <h1 class="mb-2 text-center">Code Trainer</h1>
-      <form class="row g-3 justify-content-center" action="/random" method="get">
-        <div class="col-auto">
-          <label for="difficulty-select" class="form-label me-2">Select Difficulty</label>
-          <select id="difficulty-select" class="form-select" name="difficulty">
-            <option value="Easy">Easy</option>
-            <option value="Medium">Medium</option>
-            <option value="Hard">Hard</option>
-          </select>
-        </div>
-        <div class="col-auto">
-          <button class="btn btn-primary" type="submit">
-            <i class="fa-solid fa-dice"></i>
-            Get Problem
-          </button>
-        </div>
+  <body>
+    <div class=\"container\">
+      <header>
+        <h1>Code Trainer</h1>
+        <p>Select a difficulty and get a random problem.</p>
+      </header>
+      <form class=\"controls\" action=\"/random\" method=\"get\">
+        <label for=\"difficulty-select\">Select Difficulty:</label>
+        <select id=\"difficulty-select\" name=\"difficulty\">
+          <option value=\"Easy\">Easy</option>
+          <option value=\"Medium\">Medium</option>
+          <option value=\"Hard\">Hard</option>
+        </select>
+        <button id=\"get-problem-btn\" type=\"submit\">Get Problem</button>
       </form>
       {% if problem %}
-      <div class="card mt-4">
-        <div class="card-body">
-          <h2 class="card-title">
-            <a href="{{ problem.url }}" target="_blank">{{ problem.title }}</a>
-            <span class="badge bg-secondary">{{ problem.difficulty }}</span>
-          </h2>
-          <div class="card-text">{{ problem.content or "No description available." }}</div>
-          {% if problem.sampleTestCase %}
-          <pre class="mt-3 bg-dark text-white p-3">{{ problem.sampleTestCase }}</pre>
-          <input type="hidden" id="sample-case" value="{{ problem.sampleTestCase|e }}">
-          {% endif %}
-          <form id="code-form" class="mt-3">
-            <select class="form-select mb-2" name="language">
-              <option value="cpp">C++</option>
-              <option value="python">Python</option>
-              <option value="java">Java</option>
-              <option value="go">Go</option>
-            </select>
-            <textarea class="form-control" name="code" rows="10" placeholder="print('hello')"></textarea>
-            <button type="button" id="fill-snippet-btn" class="btn btn-secondary mt-2">Start Code</button>
-            <button type="submit" class="btn btn-primary mt-3">Run Code</button>
-          </form>
-          <pre id="output" class="bg-dark text-white p-3"></pre>
+      <div id=\"problem-display-area\" class=\"content-section\">
+        <div class=\"title-bar\">
+          <h2 id=\"problem-title\">{{ problem.title }}</h2>
+          <a id=\"go-to-problem-link\" href=\"{{ problem.url }}\" target=\"_blank\">Go to LeetCode &rarr;</a>
         </div>
+        <div id=\"problem-description\">{{ problem.content or 'No description available.' }}</div>
+        {% if problem.sampleTestCase %}
+        <h3>Example:</h3>
+        <div id=\"problem-examples\"><pre>{{ problem.sampleTestCase }}</pre></div>
+        <input type=\"hidden\" id=\"sample-case\" value=\"{{ problem.sampleTestCase|e }}\">
+        {% endif %}
       </div>
-      <script id="snippets-data" type="application/json">{{ snippets_json | tojson | safe }}</script>
+      <div id=\"code-area\" class=\"content-section\">
+        <div class=\"code-actions\">
+          <h3>Code Editor</h3>
+          <div>
+            <span id=\"copy-feedback\" class=\"hidden\">Copied!</span>
+            <button id=\"copy-code-btn\" type=\"button\">Copy Code</button>
+          </div>
+        </div>
+        <form id=\"code-form\">
+          <select id=\"language-select\" name=\"language\">
+            <option value=\"cpp\">C++</option>
+            <option value=\"python\">Python</option>
+            <option value=\"java\">Java</option>
+            <option value=\"go\">Go</option>
+          </select>
+          <textarea id=\"code-editor\" name=\"code\" rows=\"10\" placeholder=\"print('hello')\"></textarea>
+          <button type=\"button\" id=\"fill-snippet-btn\">Start Code</button>
+          <button type=\"submit\">Run Code</button>
+        </form>
+        <pre id=\"output\"></pre>
+      </div>
+      <script id=\"snippets-data\" type=\"application/json\">{{ snippets_json | tojson | safe }}</script>
       <script>
         let snippets = [];
         try {
@@ -84,8 +215,8 @@ INDEX_HTML = """
         } catch (e) {
           console.error('Failed to parse snippets JSON:', e);
         }
-        const langSelect = document.querySelector('#code-form select[name="language"]');
-        const codeInput = document.querySelector('#code-form textarea[name="code"]');
+        const langSelect = document.querySelector('#language-select');
+        const codeInput = document.querySelector('#code-editor');
         function fillSnippet() {
           const lang = langSelect.value;
           const s = snippets.find(sn => sn.langSlug === lang);
@@ -109,6 +240,23 @@ INDEX_HTML = """
             output += '\nPassed: ' + data.passed;
           }
           document.getElementById('output').textContent = output;
+        });
+        document.getElementById('copy-code-btn').addEventListener('click', () => {
+          const codeToCopy = document.getElementById('code-editor').value;
+          const temp = document.createElement('textarea');
+          temp.value = codeToCopy;
+          document.body.appendChild(temp);
+          temp.select();
+          temp.setSelectionRange(0, 99999);
+          try {
+            document.execCommand('copy');
+            const feedback = document.getElementById('copy-feedback');
+            feedback.classList.remove('hidden');
+            setTimeout(() => feedback.classList.add('hidden'), 2000);
+          } catch (err) {
+            console.error('Copy failed', err);
+          }
+          document.body.removeChild(temp);
         });
       </script>
       {% endif %}
