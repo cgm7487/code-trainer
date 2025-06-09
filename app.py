@@ -307,7 +307,18 @@ async def index(request: Request, difficulty: Optional[str] = None):
                     detail = await fetch_problem_detail_async(slug)
                     if detail.get("content") or detail.get("codeSnippets"):
                         problem.update(detail)
-    snippets_json = json.dumps(problem.get("codeSnippets", [])) if problem else "[]"
+    if problem:
+        snippets = problem.get("codeSnippets", [])
+        if not snippets:
+            snippets = [
+                {"lang": "Python3", "langSlug": "python", "code": generate_template(problem, "python")},
+                {"lang": "C++", "langSlug": "cpp", "code": generate_template(problem, "cpp")},
+                {"lang": "Java", "langSlug": "java", "code": generate_template(problem, "java")},
+                {"lang": "Go", "langSlug": "go", "code": generate_template(problem, "go")},
+            ]
+        snippets_json = json.dumps(snippets)
+    else:
+        snippets_json = "[]"
     return HTMLResponse(TEMPLATE.render(problem=problem, snippets_json=snippets_json))
 
 
@@ -333,7 +344,15 @@ async def solve_page(slug: str):
     problem = await get_problem_by_slug(slug)
     if not problem:
         raise HTTPException(status_code=404, detail="Problem not found")
-    snippets_json = json.dumps(problem.get("codeSnippets", []))
+    snippets = problem.get("codeSnippets", [])
+    if not snippets:
+        snippets = [
+            {"lang": "Python3", "langSlug": "python", "code": generate_template(problem, "python")},
+            {"lang": "C++", "langSlug": "cpp", "code": generate_template(problem, "cpp")},
+            {"lang": "Java", "langSlug": "java", "code": generate_template(problem, "java")},
+            {"lang": "Go", "langSlug": "go", "code": generate_template(problem, "go")},
+        ]
+    snippets_json = json.dumps(snippets)
     return HTMLResponse(SOLVE_TEMPLATE.render(problem=problem, snippets_json=snippets_json))
 
 
