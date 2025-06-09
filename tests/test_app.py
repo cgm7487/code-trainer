@@ -120,3 +120,28 @@ def test_random_problem_not_found(monkeypatch):
     monkeypatch.setattr(app, "fetch_problems", lambda: app.LOCAL_PROBLEMS)
     response = client.get("/random?difficulty=Impossible")
     assert response.status_code == 404
+
+
+def test_random_problem_fetch_detail(monkeypatch):
+    problems = [
+        {
+            "id": 1234,
+            "title": "Burst Balloons",
+            "difficulty": "Hard",
+            "url": "https://leetcode.com/problems/burst-balloons/",
+            "content": "",
+            "sampleTestCase": "",
+        }
+    ]
+
+    monkeypatch.setattr(app, "fetch_problems", lambda: problems)
+    monkeypatch.setattr(random, "choice", lambda seq: seq[0])
+
+    def fake_detail(slug):
+        assert slug == "burst-balloons"
+        return {"content": "Some description", "sampleTestCase": "case"}
+
+    monkeypatch.setattr(app, "fetch_problem_detail", fake_detail)
+    response = client.get("/random?difficulty=Hard", headers={"accept": "text/html"})
+    assert response.status_code == 200
+    assert "Some description" in response.text

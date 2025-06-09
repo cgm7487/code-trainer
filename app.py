@@ -15,6 +15,8 @@ with open("problems.json") as f:
 
 LEETCODE_API = "https://leetcode.com/api/problems/all/"
 
+GRAPHQL_API = "https://leetcode.com/graphql"
+
 INDEX_HTML = """
 <!doctype html>
 <title>LeetCode Random Selector</title>
@@ -38,6 +40,31 @@ INDEX_HTML = """
 """
 
 TEMPLATE = Template(INDEX_HTML)
+
+
+def fetch_problem_detail(slug: str) -> dict:
+    """Retrieve problem content and sample test case from LeetCode."""
+    query = (
+        "query getQuestion($titleSlug: String!) {\n"
+        "  question(titleSlug: $titleSlug) {\n"
+        "    content\n"
+        "    sampleTestCase\n"
+        "  }\n"
+        "}"
+    )
+    payload = {"query": query, "variables": {"titleSlug": slug}}
+    headers = {"User-Agent": "Mozilla/5.0"}
+    try:
+        resp = httpx.post(GRAPHQL_API, json=payload, headers=headers, timeout=10.0)
+        resp.raise_for_status()
+        data = resp.json()
+        q = data.get("data", {}).get("question", {})
+        return {
+            "content": q.get("content", ""),
+            "sampleTestCase": q.get("sampleTestCase", ""),
+        }
+    except Exception:
+        return {"content": "", "sampleTestCase": ""}
 
 
 def fetch_problems() -> list[dict]:
@@ -89,6 +116,10 @@ async def random_problem(request: Request, difficulty: str = ""):
     if not matches:
         raise HTTPException(status_code=404, detail="No problems found for difficulty")
     problem = random.choice(matches)
+    if not problem.get("content"):
+        slug = problem.get("url", "").rstrip("/").split("/")[-1]
+        if slug:
+            problem.update(fetch_problem_detail(slug))
     if request.headers.get("accept", "").startswith("text/html"):
         return HTMLResponse(TEMPLATE.render(problem=problem))
     return problem
