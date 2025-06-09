@@ -4,14 +4,23 @@ This repository provides a small web application to help you practice LeetCode p
 
 ## Running the app
 
-1. Install dependencies:
+1. Install `uv` and the project dependencies:
    ```bash
-   pip install -r requirements.txt
+   pip install uv
+   uv pip install -r requirements.txt
    ```
 2. Start the server using `uvicorn`:
    ```bash
    uvicorn app:app --reload
    ```
 3. Open `http://localhost:8000` in your browser and choose a difficulty.
+
+## Docker
+
+You can also run the application using Docker Compose:
+
+```bash
+docker compose up --build
+```
 
 The fallback problems are defined in `problems.json`. Feel free to extend this file with more LeetCode problems.
