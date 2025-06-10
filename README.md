@@ -9,6 +9,7 @@ This repository provides a small web application to help you practice LeetCode p
    pip install uv
    uv pip install -r requirements.txt
    ```
+
    These pins currently install:
    `fastapi==0.110.0`, `starlette==0.36.3`,
    `httpx==0.27.2`, `uvicorn==0.29.0` and `jinja2==3.1.2`.
@@ -20,9 +21,11 @@ This repository provides a small web application to help you practice LeetCode p
 
 For languages other than Python you also need local compilers available. On
 Debian/Ubuntu you can install them with:
+
 ```bash
 sudo apt install g++ openjdk-17-jdk-headless golang-go
 ```
+
 If you run the app via Docker these are installed automatically.
 
 ## Online Code Runner
@@ -38,6 +41,22 @@ You can also run the application using Docker Compose:
 
 ```bash
 docker compose up --build
+```
+
+## MCP Server
+
+Add Code Trainer to your MCP server path, e.g. ""**~/Library/Application Support/Claude/claude_desktop_config.json"**
+
+```
+{
+  "mcpServers": {
+   "code-trainer": {
+      "command": "/you-mcp-proxy-path/mcp-proxy",
+      "args": ["http://127.0.0.1:8877/mcp"]
+   }
+  }
+}
+
 ```
 
 ## Running Tests
