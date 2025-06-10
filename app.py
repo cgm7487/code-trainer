@@ -92,7 +92,7 @@ INDEX_HTML = """
         <div id="problem-description">{{ problem.content or 'No description available.' }}</div>
         {% if problem.sampleTestCase %}
         <h3>Example:</h3>
-        <div id="problem-examples"><pre>{{ problem.sampleTestCase }}</pre></div>
+        <div id="problem-examples"><pre>{{ problem.sampleTestCase | e }}</pre></div>
         <input type="hidden" id="sample-case" value="{{ problem.sampleTestCase|e }}">
         {% endif %}
       </div>
@@ -117,13 +117,12 @@ INDEX_HTML = """
         </form>
         <pre id="output" class="bg-dark text-white p-3 mt-3"></pre>
       </div>
-      <script id="snippets-data" type="application/json">{{ snippets_b64 }}</script>
-     <script id="snippets-data" type="application/json">{{ snippets_b64 }}</script>
+      <script id="snippets-data" type="application/json">{{ snippets_json }}</script>
     <script>
       let snippets = [];
       try {
-        const rawB64 = document.getElementById('snippets-data')?.textContent || '';
-        if (rawB64) snippets = JSON.parse(atob(rawB64));   // ← 先 atob 解碼！
+        const raw = document.getElementById('snippets-data')?.textContent || '';
+        if (raw) snippets = JSON.parse(raw);
       } catch (e) {
         console.error('Failed to decode snippets', e);
       }
@@ -181,15 +180,23 @@ def parse_sample_test_case(case: str) -> tuple[str, str]:
             expected = line.split(":", 1)[1].strip()
     return input_data, expected
 
-def generate_template(language: str) -> str:
-    """Return an empty solution template for given language."""
-    return {
+def generate_template(problem: dict, language: str) -> str:
+    """Return a code template for the given language.
+
+    A snippet matching ``language`` from ``problem`` is preferred. If none is
+    found, a default empty template is returned.
+    """
+    lang = language.lower()
+    for sn in problem.get("codeSnippets", []):
+        if sn.get("langSlug", "").startswith(lang):
+            return sn.get("code", "")
+    defaults = {
         "python": "# Write your solution here\n",
-        "cpp": "#include <bits/stdc++.h>\nusing namespace std;\nint main() {\n    return 0;\n}\n",
+        "cpp": "#include <bits/stdc++.h>\nusing namespace std;\nint main() {\n  return 0;\n}\n",
         "java": "public class Main {\n    public static void main(String[] args) {\n    }\n}\n",
         "go": "package main\nfunc main() {}\n",
     }
-
+    return defaults.get(lang, "")
 async def fetch_problem_detail(slug: str) -> dict:
     """Retrieve problem content and sample test case from LeetCode."""
     query = (
@@ -219,17 +226,17 @@ async def fetch_problem_detail(slug: str) -> dict:
                 "codeSnippets": q.get("codeSnippets", []),
             }
     except Exception:
-        return {"content": "", "sampleTestCase": "", "codeSnippets": []}
+        return {}
 
 
 async def inject_snippets(problem: dict) -> None:
     """確保 problem 內含 codeSnippets；若缺失則以預設碼補齊。"""
     if not problem.get("codeSnippets"):
         problem["codeSnippets"] = [
-            {"lang": "Python3", "langSlug": "python", "code": generate_template("python")},
-            {"lang": "C++", "langSlug": "cpp", "code": generate_template("cpp")},
-            {"lang": "Java", "langSlug": "java", "code": generate_template("java")},
-            {"lang": "Go", "langSlug": "go", "code": generate_template("go")},
+            {"lang": "Python3", "langSlug": "python", "code": generate_template({}, "python")},
+            {"lang": "C++", "langSlug": "cpp", "code": generate_template({}, "cpp")},
+            {"lang": "Java", "langSlug": "java", "code": generate_template({}, "java")},
+            {"lang": "Go", "langSlug": "go", "code": generate_template({}, "go")},
         ]
 
 async def fetch_problems() -> list[dict]:
@@ -269,8 +276,11 @@ async def get_problem_by_slug(slug: str) -> Optional[dict]:
     problems = await fetch_problems()
     for p in problems:
         if p.get("url", "").rstrip("/").split("/")[-1] == slug:
-            if not p.get("content") or not p.get("codeSnippets"):
-                p.update(await fetch_problem_detail(slug))
+            if not p.get("content") or not p.get("codeSnippets") or not p.get("sampleTestCase"):
+                detail = await fetch_problem_detail(slug)
+                for k, v in detail.items():
+                    if not p.get(k):
+                        p[k] = v
             return p
     return None
 
@@ -285,26 +295,44 @@ async def index(request: Request, difficulty: Optional[str] = None):
             problem = random.choice(cand).copy()
             slug = problem["url"].rstrip("/").split("/")[-1]
             detail = await fetch_problem_detail(slug)
-            problem.update(detail)
-    snippets_b64 = ""
+            for k, v in detail.items():
+                if not problem.get(k):
+                    problem[k] = v
+    snippets_json = ""
     if problem:
         await inject_snippets(problem)
-        snippets_b64 = base64.b64encode(json.dumps(problem["codeSnippets"]).encode()).decode()
-    return HTMLResponse(TEMPLATE.render(problem=problem, snippets_b64=snippets_b64))
+        snippets_json = json.dumps(problem["codeSnippets"]) 
+    return HTMLResponse(TEMPLATE.render(problem=problem, snippets_json=snippets_json))
 
 
-@app.get("/random", response_class=HTMLResponse)
+@app.get("/solve/{slug}", response_class=HTMLResponse)
+async def solve_page(slug: str):
+    problem = await get_problem_by_slug(slug)
+    if not problem:
+        raise HTTPException(404, "Problem not found")
+    await inject_snippets(problem)
+    snippets_json = json.dumps(problem["codeSnippets"])
+    return HTMLResponse(TEMPLATE.render(problem=problem, snippets_json=snippets_json))
+
+
+@app.get("/random")
 async def random_problem(request: Request, difficulty: str):
     problems = await fetch_problems()
     matches = [p for p in problems if p["difficulty"].lower() == difficulty.lower()]
     if not matches:
         raise HTTPException(404, "No problems for difficulty")
-    problem = random.choice(matches)
+    problem = random.choice(matches).copy()
     slug = problem["url"].rstrip("/").split("/")[-1]
-    problem.update(await fetch_problem_detail(slug))
+    detail = await fetch_problem_detail(slug)
+    for k, v in detail.items():
+        if not problem.get(k):
+            problem[k] = v
     await inject_snippets(problem)
-    snippets_b64 = base64.b64encode(json.dumps(problem["codeSnippets"]).encode()).decode()
-    return HTMLResponse(TEMPLATE.render(problem=problem, snippets_b64=snippets_b64))
+    accept = request.headers.get("accept", "")
+    if accept.startswith("text/html"):
+        snippets_json = json.dumps(problem["codeSnippets"])
+        return HTMLResponse(TEMPLATE.render(problem=problem, snippets_json=snippets_json))
+    return problem
 
 
 @app.post("/execute")
