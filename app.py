@@ -12,7 +12,11 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from jinja2 import Template
 
+from fastapi_mcp import FastApiMCP
+
+
 app = FastAPI()
+
 
 # Load problems from local file as a fallback
 with open("problems.json") as f:
@@ -455,7 +459,5 @@ async def run_code(language: str, code: str, stdin: str = "") -> dict:
     return {"stdout": "", "stderr": "Unsupported language", "returncode": 1}
 
 
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+mcp_server = FastApiMCP(app)
+mcp_server.mount()
