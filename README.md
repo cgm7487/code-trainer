@@ -5,6 +5,7 @@ This repository provides a small web application to help you practice LeetCode p
 ## Running the app
 
 1. Install `uv` and the project dependencies pinned in `requirements.txt`:
+
    ```bash
    pip install uv
    uv pip install -r requirements.txt
@@ -14,6 +15,7 @@ This repository provides a small web application to help you practice LeetCode p
    `fastapi==0.110.0`, `starlette==0.36.3`,
    `httpx==0.27.2`, `uvicorn==0.29.0` and `jinja2==3.1.2`.
 2. Start the server using `uvicorn`:
+
    ```bash
    uvicorn app:app --reload
    ```
@@ -44,6 +46,8 @@ docker compose up --build
 ```
 
 ## MCP Server
+
+Install mcp-proxy: https://github.com/sparfenyuk/mcp-proxy
 
 Add Code Trainer to your MCP server path, e.g. ""**~/Library/Application Support/Claude/claude_desktop_config.json"**
 
