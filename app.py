@@ -9,10 +9,23 @@ from typing import Optional, Tuple
 
 import httpx
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, JSONResponse
 from jinja2 import Template
 
 from fastapi_mcp import FastApiMCP
+
+from pydantic import BaseModel, Field
+
+
+class ExecRequest(BaseModel):
+    code: str | None = Field(
+        None, description="Raw code string to execute (UTF-8 encoded)"
+    )
+    codeB64: str | None = Field(
+        None, description="Base-64 encoded code string (UTF-8)"
+    )
+    language: str = Field("python", description="python | cpp | java | go")
+    sampleCase: str | None = Field(None, description="LeetCode sample case string")
 
 
 app = FastAPI()
@@ -308,15 +321,27 @@ async def random_problem(request: Request, difficulty: str):
 
 
 @app.post("/execute")
-async def execute_code(request: Request):
-    data = await request.json()
-    code = data.get("code", "")
-    language = data.get("language", "python").lower()
-    sample = data.get("sampleCase", "")
+async def execute_code(req: ExecRequest):
+    if req.code is not None:
+        code = req.code
+    elif req.codeB64 is not None:
+        try:
+            code = base64.b64decode(req.codeB64).decode()
+        except Exception as e:
+            return JSONResponse(
+                status_code=400,
+                content={"error": f"codeB64 parse failed：{e}"},
+            )
+    else:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "code or codeB64 must be provided"},
+        )
+
+    language = req.language.lower()
+    sample = req.sampleCase or ""
     input_data, expected = parse_sample_test_case(sample)
 
-    # --- runtime dispatch ---
-    result: dict
     if language == "python":
         result = await _run_python(code, input_data)
     elif language in {"cpp", "c++"}:
@@ -329,7 +354,9 @@ async def execute_code(request: Request):
         result = {"stdout": "", "stderr": "Unsupported language", "returncode": 1}
 
     if expected:
-        result["passed"] = result["returncode"] == 0 and result["stdout"].strip() == expected
+        result["passed"] = (
+            result["returncode"] == 0 and result["stdout"].strip() == expected
+        )
     return result
 
 
