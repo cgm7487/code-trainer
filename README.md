@@ -52,8 +52,8 @@ docker compose up --build
 ```
 {
   "mcpServers": {
-    "crystal": {
-      "url": "http://localhost:8888/mcp"
+    "code-trainer": {
+      "url": "http://localhost:8877/mcp"
     }
   }
 }
