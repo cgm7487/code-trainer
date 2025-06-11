@@ -47,6 +47,20 @@ docker compose up --build
 
 ## MCP Server
 
+* Use SSE conneciton directly:
+
+```
+{
+  "mcpServers": {
+    "crystal": {
+      "url": "http://localhost:8888/mcp"
+    }
+  }
+}
+```
+
+* Use proxy if you can't config the SSE url directly:
+
 Install mcp-proxy: https://github.com/sparfenyuk/mcp-proxy
 
 Add Code Trainer to your MCP server path, e.g. ""**~/Library/Application Support/Claude/claude_desktop_config.json"**
