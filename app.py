@@ -96,6 +96,10 @@ INDEX_HTML = """
         </select>
         <button id="get-problem-btn" type="submit">Get Problem</button>
       </form>
+      <div id="recent-area" class="content-section" style="display:none;">
+        <h3>Recent Problems</h3>
+        <ul id="recent-list" class="mb-0"></ul>
+      </div>
       {% if problem %}
       <div id="problem-display-area" class="content-section">
         <div class="title-bar">
@@ -131,7 +135,6 @@ INDEX_HTML = """
         <pre id="output" class="bg-dark text-white p-3 mt-3"></pre>
       </div>
       <script id="snippets-data" type="application/json">{{ snippets_b64 }}</script>
-     <script id="snippets-data" type="application/json">{{ snippets_b64 }}</script>
     <script>
       let snippets = [];
       try {
@@ -140,6 +143,24 @@ INDEX_HTML = """
       } catch (e) {
         console.error('Failed to decode snippets', e);
       }
+
+      function loadHistory(){
+        try{ return JSON.parse(localStorage.getItem('recentProblems')||'[]'); }catch(e){ return []; }
+      }
+      function saveHistory(list){ localStorage.setItem('recentProblems', JSON.stringify(list.slice(0,3))); }
+      function renderHistory(){
+        const area=document.getElementById('recent-area');
+        if(!area) return; const listEl=document.getElementById('recent-list');
+        const data=loadHistory();
+        area.style.display=data.length?'':'none';
+        listEl.innerHTML='';
+        for(const p of data){ const li=document.createElement('li'); const a=document.createElement('a'); a.href='/solve/'+p.slug; a.textContent=p.title; li.appendChild(a); listEl.appendChild(li);} }
+      function addHistory(problem){
+        const data=loadHistory().filter(p=>p.slug!==problem.slug);
+        data.unshift({slug:problem.slug,title:problem.title});
+        saveHistory(data); renderHistory();
+      }
+
         const langSelect=document.querySelector('#language-select');
         const codeInput=document.querySelector('#code-editor');
         function fillSnippet(){
@@ -150,6 +171,8 @@ INDEX_HTML = """
         langSelect.addEventListener('change',fillSnippet);
         document.getElementById('reset-code-btn').addEventListener('click',fillSnippet);
         fillSnippet();
+        renderHistory();
+        {% if problem %}addHistory({slug: '{{ problem.slug }}', title: '{{ problem.title }}'});{% endif %}
         document.getElementById('code-form').addEventListener('submit',async(e)=>{
           e.preventDefault();
           const code=e.target.code.value;
@@ -284,6 +307,7 @@ async def get_problem_by_slug(slug: str) -> Optional[dict]:
         if p.get("url", "").rstrip("/").split("/")[-1] == slug:
             if not p.get("content") or not p.get("codeSnippets"):
                 p.update(await fetch_problem_detail(slug))
+            p["slug"] = slug
             return p
     return None
 
@@ -299,6 +323,7 @@ async def index(request: Request, difficulty: Optional[str] = None):
             slug = problem["url"].rstrip("/").split("/")[-1]
             detail = await fetch_problem_detail(slug)
             problem.update(detail)
+            problem["slug"] = slug
     snippets_b64 = ""
     if problem:
         await inject_snippets(problem)
@@ -315,9 +340,20 @@ async def random_problem(request: Request, difficulty: str):
     problem = random.choice(matches)
     slug = problem["url"].rstrip("/").split("/")[-1]
     problem.update(await fetch_problem_detail(slug))
+    problem["slug"] = slug
     await inject_snippets(problem)
     snippets_b64 = base64.b64encode(json.dumps(problem["codeSnippets"]).encode()).decode()
     return HTMLResponse(TEMPLATE.render(problem=problem, snippets_b64=snippets_b64))
+
+
+@app.get("/solve/{slug}", response_class=HTMLResponse)
+async def solve_page(slug: str):
+    problem = await get_problem_by_slug(slug)
+    if not problem:
+        raise HTTPException(404, "Problem not found")
+    await inject_snippets(problem)
+    snippets_b64 = base64.b64encode(json.dumps(problem["codeSnippets"]).encode()).decode()
+    return HTMLResponse(SOLVE_TEMPLATE.render(problem=problem, snippets_b64=snippets_b64))
 
 
 @app.post("/execute")
