@@ -1,4 +1,4 @@
-FROM python:3.11-slim
+FROM python:3.13-slim
 
 # Install compilers for the online code runner
 RUN apt-get update && \

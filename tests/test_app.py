@@ -109,23 +109,37 @@ def test_index_no_difficulty(monkeypatch):
 def test_index_with_difficulty(monkeypatch):
     monkeypatch.setattr(app, "fetch_problems", _async_return(app.LOCAL_PROBLEMS))
     monkeypatch.setattr(random, "choice", lambda seq: seq[0])
+    monkeypatch.setattr(app, "fetch_problem_detail", _async_return(
+        {"content": "Given an array of integers nums and an integer target, return indices of the two numbers such that they add up to target.",
+         "sampleTestCase": "Input: nums = [2,7,11,15], target = 9\nOutput: [0,1]",
+         "codeSnippets": []}
+    ))
     response = client.get("/?difficulty=Easy")
     assert response.status_code == 200
     assert "Two Sum" in response.text
     assert "indices of the two numbers" in response.text
 
 
-def test_random_problem_json(monkeypatch):
+def test_random_problem_returns_html(monkeypatch):
     monkeypatch.setattr(app, "fetch_problems", _async_return(app.LOCAL_PROBLEMS))
     monkeypatch.setattr(random, "choice", lambda seq: seq[0])
+    monkeypatch.setattr(app, "fetch_problem_detail", _async_return(
+        {"content": "Given an array", "sampleTestCase": "", "codeSnippets": []}
+    ))
     response = client.get("/random?difficulty=Easy")
     assert response.status_code == 200
-    assert response.json()["title"] == "Two Sum"
+    assert response.headers["content-type"].startswith("text/html")
+    assert "Two Sum" in response.text
 
 
 def test_random_problem_html(monkeypatch):
     monkeypatch.setattr(app, "fetch_problems", _async_return(app.LOCAL_PROBLEMS))
     monkeypatch.setattr(random, "choice", lambda seq: seq[0])
+    monkeypatch.setattr(app, "fetch_problem_detail", _async_return(
+        {"content": "Given an array of integers nums",
+         "sampleTestCase": "Input: nums = [2,7,11,15], target = 9\nOutput: [0,1]",
+         "codeSnippets": []}
+    ))
     response = client.get("/random?difficulty=Easy", headers={"accept": "text/html"})
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/html")
@@ -165,7 +179,8 @@ def test_random_problem_fetch_detail(monkeypatch):
 
 
 def test_solve_page(monkeypatch):
-    monkeypatch.setattr(app, "fetch_problems", _async_return(app.LOCAL_PROBLEMS))
+    import copy
+    monkeypatch.setattr(app, "fetch_problems", _async_return(copy.deepcopy(app.LOCAL_PROBLEMS)))
 
     async def fake_detail(slug):
         return {"codeSnippets": [{"lang": "Python3", "langSlug": "python", "code": "print('hi')"}]}
@@ -177,7 +192,8 @@ def test_solve_page(monkeypatch):
 
 
 def test_solve_page_contains_snippet(monkeypatch):
-    monkeypatch.setattr(app, "fetch_problems", _async_return(app.LOCAL_PROBLEMS))
+    import copy, re, json, base64
+    monkeypatch.setattr(app, "fetch_problems", _async_return(copy.deepcopy(app.LOCAL_PROBLEMS)))
 
     async def fake_detail(slug):
         return {
@@ -191,15 +207,14 @@ def test_solve_page_contains_snippet(monkeypatch):
     monkeypatch.setattr(app, "fetch_problem_detail", fake_detail)
     response = client.get("/solve/two-sum")
     assert response.status_code == 200
-    import re, json
     m = re.search(r'id="snippets-data" type="application/json">(.*?)</script>', response.text)
     assert m, 'snippets-data script not found'
-    data = json.loads(m.group(1))
+    data = json.loads(base64.b64decode(m.group(1)).decode())
     assert any(sn["code"] == "print('hi')" for sn in data)
 
 
 def test_solve_page_default_snippets(monkeypatch):
-    import copy, json
+    import copy, json, re, base64
     with open("problems.json") as f:
         original = json.load(f)
     monkeypatch.setattr(app, "fetch_problems", _async_return(copy.deepcopy(original)))
@@ -210,7 +225,10 @@ def test_solve_page_default_snippets(monkeypatch):
     monkeypatch.setattr(app, "fetch_problem_detail", fake_detail)
     response = client.get("/solve/two-sum")
     assert response.status_code == 200
-    assert "using namespace std" in response.text
+    m = re.search(r'id="snippets-data" type="application/json">(.*?)</script>', response.text)
+    assert m, 'snippets-data script not found'
+    data = json.loads(base64.b64decode(m.group(1)).decode())
+    assert any("using namespace std" in sn["code"] for sn in data)
 
 
 def test_execute_code_python():
@@ -249,13 +267,16 @@ def test_execute_with_sample_case():
     assert data["passed"] is True
 
 
-def test_generate_template_from_snippet():
-    problem = {"codeSnippets": [{"lang": "Python", "langSlug": "python", "code": "print('x')"}]}
-    assert app.generate_template(problem, "python") == "print('x')"
+def test_generate_template_python():
+    assert "Write your solution" in app.generate_template("python")
 
 
-def test_generate_template_fallback():
-    assert "Write your solution" in app.generate_template({}, "python")
+def test_generate_template_cpp():
+    assert "using namespace std" in app.generate_template("cpp")
+
+
+def test_generate_template_unknown():
+    assert "Write your solution" in app.generate_template("ruby")
 
 
 def test_run_code_dispatch_python():

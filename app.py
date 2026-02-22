@@ -219,12 +219,13 @@ def parse_sample_test_case(case: str) -> tuple[str, str]:
 
 def generate_template(language: str) -> str:
     """Return an empty solution template for given language."""
-    return {
+    templates = {
         "python": "# Write your solution here\n",
         "cpp": "#include <bits/stdc++.h>\nusing namespace std;\nint main() {\n    return 0;\n}\n",
         "java": "public class Main {\n    public static void main(String[] args) {\n    }\n}\n",
         "go": "package main\nfunc main() {}\n",
     }
+    return templates.get(language, "# Write your solution here\n")
 
 async def fetch_problem_detail(slug: str) -> dict:
     """Retrieve problem content and sample test case from LeetCode."""
@@ -337,7 +338,7 @@ async def random_problem(request: Request, difficulty: str):
     matches = [p for p in problems if p["difficulty"].lower() == difficulty.lower()]
     if not matches:
         raise HTTPException(404, "No problems for difficulty")
-    problem = random.choice(matches)
+    problem = random.choice(matches).copy()
     slug = problem["url"].rstrip("/").split("/")[-1]
     problem.update(await fetch_problem_detail(slug))
     problem["slug"] = slug
@@ -401,9 +402,11 @@ async def _run_python(code: str, stdin: str = "") -> dict:
     with tempfile.NamedTemporaryFile("w+", suffix=".py", delete=False) as tmp:
         tmp.write(code)
         tmp.flush()
+        tmp_name = tmp.name
+    try:
         proc = await asyncio.create_subprocess_exec(
             sys.executable,
-            tmp.name,
+            tmp_name,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -413,12 +416,13 @@ async def _run_python(code: str, stdin: str = "") -> dict:
         except asyncio.TimeoutError:
             proc.kill()
             return {"stdout": "", "stderr": "Execution timed out", "returncode": 1}
-    os.unlink(tmp.name)
-    return {
-        "stdout": stdout.decode(),
-        "stderr": stderr.decode(),
-        "returncode": proc.returncode,
-    }
+        return {
+            "stdout": stdout.decode(),
+            "stderr": stderr.decode(),
+            "returncode": proc.returncode,
+        }
+    finally:
+        os.unlink(tmp_name)
 
 
 async def _run_cpp(code: str, stdin: str = "") -> dict:
@@ -487,10 +491,12 @@ async def _run_go(code: str, stdin: str = "") -> dict:
     with tempfile.NamedTemporaryFile("w+", suffix=".go", delete=False) as tmp:
         tmp.write(code)
         tmp.flush()
+        tmp_name = tmp.name
+    try:
         proc = await asyncio.create_subprocess_exec(
             "go",
             "run",
-            tmp.name,
+            tmp_name,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -500,12 +506,13 @@ async def _run_go(code: str, stdin: str = "") -> dict:
         except asyncio.TimeoutError:
             proc.kill()
             return {"stdout": "", "stderr": "Execution timed out", "returncode": 1}
-    os.unlink(tmp.name)
-    return {
-        "stdout": stdout.decode(),
-        "stderr": stderr.decode(),
-        "returncode": proc.returncode,
-    }
+        return {
+            "stdout": stdout.decode(),
+            "stderr": stderr.decode(),
+            "returncode": proc.returncode,
+        }
+    finally:
+        os.unlink(tmp_name)
 
 
 async def run_code(language: str, code: str, stdin: str = "") -> dict:
